@@ -1,5 +1,0 @@
-/Users/markse/dev/rtos/build/CMakeFiles/rtos.dir
-/Users/markse/dev/rtos/build/CMakeFiles/rtos_test.dir
-/Users/markse/dev/rtos/build/CMakeFiles/test.dir
-/Users/markse/dev/rtos/build/CMakeFiles/edit_cache.dir
-/Users/markse/dev/rtos/build/CMakeFiles/rebuild_cache.dir

@@ -1,2 +1,0 @@
-/Library/Developer/CommandLineTools/usr/bin/ar qc librtos.a CMakeFiles/rtos.dir/src/list.c.o CMakeFiles/rtos.dir/src/task.c.o CMakeFiles/rtos.dir/src/sem.c.o CMakeFiles/rtos.dir/src/mutex.c.o CMakeFiles/rtos.dir/src/queue.c.o CMakeFiles/rtos.dir/src/timer.c.o
-/Library/Developer/CommandLineTools/usr/bin/ranlib librtos.a

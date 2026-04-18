@@ -9,6 +9,9 @@ cmake_minimum_required(VERSION 3.13)
 # For AVR ATmega328P:
 #   cmake -B build_avr -DCMAKE_TOOLCHAIN_FILE=cmake/avr_atmega328p.cmake
 #
+# For RISC-V (RV32IMAC, CLINT timer — QEMU virt / SiFive FE310):
+#   cmake -B build_rv32 -DCMAKE_TOOLCHAIN_FILE=cmake/riscv32_clint.cmake
+#
 # For host unit tests (default, no hardware):
 #   cmake -B build && cmake --build build && ./build/rtos_test
 
@@ -27,6 +30,13 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "avr")
     set(RTOS_TARGET_AVR ON)
 else()
     set(RTOS_TARGET_AVR OFF)
+endif()
+
+# Detect RISC-V cross-compile (toolchain file sets CMAKE_SYSTEM_PROCESSOR=riscv)
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "riscv")
+    set(RTOS_TARGET_RISCV ON)
+else()
+    set(RTOS_TARGET_RISCV OFF)
 endif()
 
 project(rtos C ASM)
@@ -57,6 +67,11 @@ if(RTOS_TARGET_PICO)
 elseif(RTOS_TARGET_AVR)
     set(RTOS_PORT_SOURCES
         port/avr_atmega/port.c
+    )
+elseif(RTOS_TARGET_RISCV)
+    set(RTOS_PORT_SOURCES
+        port/riscv/port.c
+        port/riscv/port_asm.S
     )
 else()
     set(RTOS_PORT_SOURCES "")
@@ -89,7 +104,7 @@ endif()
 # Host-side unit tests (runs on the development machine, no hardware needed)
 # ---------------------------------------------------------------------------
 
-if(NOT RTOS_TARGET_PICO AND NOT RTOS_TARGET_AVR)
+if(NOT RTOS_TARGET_PICO AND NOT RTOS_TARGET_AVR AND NOT RTOS_TARGET_RISCV)
     enable_testing()
 
     add_executable(rtos_test test/test_rtos.c)

@@ -9,8 +9,7 @@ A small, portable, hobby-grade RTOS written in C.
 - Easily portable — architecture-specific code isolated in `port/<arch>/`
 - Host-testable kernel logic (unit tests run on the development machine)
 
-**Primary target:** RP2040 (ARM Cortex-M0+)  
-**Planned:** RISC-V (stubs in `port/riscv/`)
+**Supported targets:** RP2040 (ARM Cortex-M0+), AVR ATmega328P (Arduino Uno/Nano), RISC-V RV32IMAC (QEMU virt / SiFive FE310)
 
 ---
 
@@ -34,8 +33,12 @@ rtos/
 │   ├── timer.c
 │   └── list.c        # Internal sorted linked list
 ├── port/
-│   ├── arm_cm0plus/  # SysTick, PendSV context switch
-│   └── riscv/        # Placeholder (to be implemented)
+│   ├── arm_cm0plus/  # SysTick, PendSV context switch (RP2040)
+│   ├── avr_atmega/   # Timer1 CTC, cli/sei, ISR_NAKED context switch (ATmega328P)
+│   └── riscv/        # CLINT timer, machine-mode trap handler (RV32IMAC)
+├── cmake/
+│   ├── avr_atmega328p.cmake   # avr-gcc toolchain file
+│   └── riscv32_clint.cmake    # riscv64-unknown-elf-gcc toolchain file (rv32imac)
 ├── test/
 │   └── test_rtos.c   # Host-side unit tests
 └── CMakeLists.txt
@@ -51,9 +54,13 @@ Edit `include/rtos_config.h` (or define before including `rtos.h`):
 |---|---|---|
 | `RTOS_MAX_TASKS` | 16 | Maximum simultaneous tasks (includes idle) |
 | `RTOS_MAX_PRIORITIES` | 8 | Number of priority levels (0 = highest) |
-| `RTOS_TICK_RATE_HZ` | 1000 | SysTick frequency |
+| `RTOS_TICK_RATE_HZ` | 1000 | SysTick / timer interrupt frequency |
 | `RTOS_MAX_TIMERS` | 8 | Maximum software timers |
 | `RTOS_TASK_NAME_LEN` | 16 | Task/timer name buffer size |
+| `RTOS_IDLE_STACK_WORDS` | 64 | Idle stack size in `RTOS_STACK_BYTES_PER_WORD` units (256 B on 32-bit) |
+| `RTOS_STACK_BYTES_PER_WORD` | 4 | Bytes per stack unit — set to `1` on AVR |
+| `RTOS_CLINT_BASE_ADDR` | `0x02000000` | CLINT base address (RISC-V only) |
+| `RTOS_MTIME_HZ` | `10000000` | MTIME counter frequency in Hz (RISC-V only) |
 
 ---
 
@@ -109,9 +116,31 @@ static uint8_t    my_stack[64];   // 64 bytes
 xTaskCreate(&my_tcb, my_stack, 64, my_task_func, NULL, "myTask", 1);
 ```
 
----
+### RISC-V RV32IMAC (QEMU virt / SiFive FE310 / HiFive1)
 
-## API quick-reference
+Requires `riscv64-unknown-elf-gcc` (targets RV32 via `-march=rv32imac`).
+On macOS: `brew install riscv-software-src/riscv/riscv-gnu-toolchain`.
+On Ubuntu: `sudo apt install gcc-riscv64-unknown-elf`.
+
+```sh
+# Cross-compile for RV32IMAC (QEMU virt machine — CLINT at 0x02000000, MTIME 10 MHz)
+cmake -B build_rv32 \
+      -DCMAKE_TOOLCHAIN_FILE=cmake/riscv32_clint.cmake
+cmake --build build_rv32
+
+# Run on QEMU virt machine (requires a linker script to place the binary at 0x80000000)
+qemu-system-riscv32 -machine virt -nographic -bios none \
+                    -kernel build_rv32/rtos.elf
+```
+
+**SiFive HiFive1 / FE310 (32 768 Hz MTIME):** override the MTIME frequency in
+your application config before including `rtos.h`:
+
+```c
+#define RTOS_MTIME_HZ  32768UL   // FE310 MTIME runs at 32.768 kHz
+```
+
+---
 
 ### Kernel
 ```c
@@ -221,10 +250,10 @@ int main(void)
 
 ## Porting to a new architecture
 
-1. Copy `port/arm_cm0plus/` to `port/<your-arch>/`
+1. Copy `port/arm_cm0plus/` (or `port/riscv/`) to `port/<your-arch>/`
 2. Implement `port.c`: `port_init`, `port_enter_critical`, `port_exit_critical`, `port_request_reschedule`, `port_start_first_task`, `port_init_stack`
-3. Implement `port_asm.S`: the context-switch handler
-4. Update `CMakeLists.txt` to select the right port sources
+3. Implement `port_asm.S` (or use inline asm in `port.c`): the context-switch handler
+4. Add a CMake toolchain file in `cmake/` and update `CMakeLists.txt` to select the port sources
 
 ---
 

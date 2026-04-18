@@ -41,6 +41,23 @@
 #   define RTOS_STACK_BYTES_PER_WORD  4
 #endif
 
+// --------------------------------------------------------------------------
+// RISC-V CLINT configuration (only used by port/riscv/port.c and port_asm.S)
+// --------------------------------------------------------------------------
+
+// Base address of the Core-Local Interruptor (CLINT).
+// 0x02000000 = QEMU virt machine default and SiFive FE310 / HiFive1.
+#ifndef RTOS_CLINT_BASE_ADDR
+#   define RTOS_CLINT_BASE_ADDR   0x02000000UL
+#endif
+
+// Frequency of the MTIME counter in Hz.
+// QEMU virt machine: 10 MHz (10 000 000).
+// SiFive FE310 / HiFive1: 32 768 Hz — override in your application config.
+#ifndef RTOS_MTIME_HZ
+#   define RTOS_MTIME_HZ          10000000UL
+#endif
+
 // Special timeout values
 #define RTOS_WAIT_FOREVER   ((uint32_t)0xFFFFFFFFUL)
 #define RTOS_NO_WAIT        ((uint32_t)0UL)
