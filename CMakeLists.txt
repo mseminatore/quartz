@@ -12,6 +12,9 @@ cmake_minimum_required(VERSION 3.13)
 # For RISC-V (RV32IMAC, CLINT timer — QEMU virt / SiFive FE310):
 #   cmake -B build_rv32 -DCMAKE_TOOLCHAIN_FILE=cmake/riscv32_clint.cmake
 #
+# For ESP32-S3 (Xtensa LX7, Call0 ABI — Espressif QEMU):
+#   cmake -B build_esp32s3 -DCMAKE_TOOLCHAIN_FILE=cmake/esp32s3_qemu.cmake
+#
 # For host unit tests (default, no hardware):
 #   cmake -B build && cmake --build build && ./build/rtos_test
 
@@ -37,6 +40,13 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "riscv")
     set(RTOS_TARGET_RISCV ON)
 else()
     set(RTOS_TARGET_RISCV OFF)
+endif()
+
+# Detect ESP32-S3 cross-compile (toolchain file sets CMAKE_SYSTEM_PROCESSOR=xtensa-esp32s3)
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "xtensa-esp32s3")
+    set(RTOS_TARGET_ESP32S3 ON)
+else()
+    set(RTOS_TARGET_ESP32S3 OFF)
 endif()
 
 project(rtos C ASM)
@@ -73,6 +83,11 @@ elseif(RTOS_TARGET_RISCV)
         port/riscv/port.c
         port/riscv/port_asm.S
     )
+elseif(RTOS_TARGET_ESP32S3)
+    set(RTOS_PORT_SOURCES
+        port/xtensa_esp32s3/port.c
+        port/xtensa_esp32s3/port_asm.S
+    )
 else()
     set(RTOS_PORT_SOURCES "")
 endif()
@@ -104,7 +119,7 @@ endif()
 # Host-side unit tests (runs on the development machine, no hardware needed)
 # ---------------------------------------------------------------------------
 
-if(NOT RTOS_TARGET_PICO AND NOT RTOS_TARGET_AVR AND NOT RTOS_TARGET_RISCV)
+if(NOT RTOS_TARGET_PICO AND NOT RTOS_TARGET_AVR AND NOT RTOS_TARGET_RISCV AND NOT RTOS_TARGET_ESP32S3)
     enable_testing()
 
     add_executable(rtos_test test/test_rtos.c)

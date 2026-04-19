@@ -9,7 +9,7 @@ A small, portable, hobby-grade RTOS written in C.
 - Easily portable — architecture-specific code isolated in `port/<arch>/`
 - Host-testable kernel logic (unit tests run on the development machine)
 
-**Supported targets:** RP2040 (ARM Cortex-M0+), AVR ATmega328P (Arduino Uno/Nano), RISC-V RV32IMAC (QEMU virt / SiFive FE310)
+**Supported targets:** RP2040 (ARM Cortex-M0+), AVR ATmega328P (Arduino Uno/Nano), RISC-V RV32IMAC (QEMU virt / SiFive FE310), ESP32-S3 (Xtensa LX7, Espressif QEMU)
 
 ---
 
@@ -33,12 +33,14 @@ rtos/
 │   ├── timer.c
 │   └── list.c        # Internal sorted linked list
 ├── port/
-│   ├── arm_cm0plus/  # SysTick, PendSV context switch (RP2040)
-│   ├── avr_atmega/   # Timer1 CTC, cli/sei, ISR_NAKED context switch (ATmega328P)
-│   └── riscv/        # CLINT timer, machine-mode trap handler (RV32IMAC)
+│   ├── arm_cm0plus/       # SysTick, PendSV context switch (RP2040)
+│   ├── avr_atmega/        # Timer1 CTC, cli/sei, ISR_NAKED context switch (ATmega328P)
+│   ├── riscv/             # CLINT timer, machine-mode trap handler (RV32IMAC)
+│   └── xtensa_esp32s3/    # TIMG0 timer, interrupt matrix, Xtensa level-1 ISR (ESP32-S3)
 ├── cmake/
 │   ├── avr_atmega328p.cmake   # avr-gcc toolchain file
-│   └── riscv32_clint.cmake    # riscv64-unknown-elf-gcc toolchain file (rv32imac)
+│   ├── riscv32_clint.cmake    # riscv64-unknown-elf-gcc toolchain file (rv32imac)
+│   └── esp32s3_qemu.cmake     # xtensa-esp32s3-elf-gcc toolchain file (Call0 ABI)
 ├── test/
 │   └── test_rtos.c   # Host-side unit tests
 └── CMakeLists.txt
@@ -61,6 +63,8 @@ Edit `include/rtos_config.h` (or define before including `rtos.h`):
 | `RTOS_STACK_BYTES_PER_WORD` | 4 | Bytes per stack unit — set to `1` on AVR |
 | `RTOS_CLINT_BASE_ADDR` | `0x02000000` | CLINT base address (RISC-V only) |
 | `RTOS_MTIME_HZ` | `10000000` | MTIME counter frequency in Hz (RISC-V only) |
+| `RTOS_ESP32S3_CPU_HZ` | `240000000` | CPU frequency in Hz (ESP32-S3 only) |
+| `RTOS_TIMG0_BASE_ADDR` | `0x6001F000` | Timer Group 0 base address (ESP32-S3 only) |
 
 ---
 
@@ -139,6 +143,35 @@ your application config before including `rtos.h`:
 ```c
 #define RTOS_MTIME_HZ  32768UL   // FE310 MTIME runs at 32.768 kHz
 ```
+
+### ESP32-S3 (Xtensa LX7 — Espressif QEMU)
+
+Requires Espressif's Xtensa toolchain (`xtensa-esp32s3-elf-gcc`) and the
+[Espressif QEMU fork](https://github.com/espressif/qemu/releases).
+
+**Toolchain install (one-time):**
+```sh
+# Via ESP-IDF (recommended — installs matching QEMU too):
+#   https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/get-started/
+# Or standalone pre-built binaries from Espressif's GitHub releases.
+```
+
+```sh
+# Cross-compile for ESP32-S3 (Xtensa LX7, Call0 ABI, TIMG0 1 kHz tick)
+cmake -B build_esp32s3 \
+      -DCMAKE_TOOLCHAIN_FILE=cmake/esp32s3_qemu.cmake
+cmake --build build_esp32s3
+
+# Run on Espressif QEMU fork
+qemu-system-xtensa -machine esp32s3 -nographic \
+                   -kernel build_esp32s3/rtos.elf
+```
+
+**Key design notes (ESP32-S3):**
+- Uses **Call0 ABI** (`-mabi=call0`): flat register set, no window overflow complexity.
+- Tick source: **Timer Group 0, Timer 0** (TIMG0_T0) — APB 80 MHz, divider=80 → 1 MHz, alarm=999 → 1 kHz.
+- Interrupt routing: Peripheral source 10 (TG0_T0_LEVEL_INT) → Interrupt Matrix → CPU slot 6 → level-1 ISR.
+- Context frame: 18 words (72 bytes) — EPC1, EPS1, SAR, a0, a2–a15. `sp` is stored in the TCB.
 
 ---
 

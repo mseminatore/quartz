@@ -58,6 +58,22 @@
 #   define RTOS_MTIME_HZ          10000000UL
 #endif
 
+// --------------------------------------------------------------------------
+// ESP32-S3 (Xtensa LX7) configuration
+// (only used by port/xtensa_esp32s3/port.c and port_asm.S)
+// --------------------------------------------------------------------------
+
+// CPU frequency in Hz.  ESP32-S3 runs at 240 MHz by default.
+#ifndef RTOS_ESP32S3_CPU_HZ
+#   define RTOS_ESP32S3_CPU_HZ    240000000UL
+#endif
+
+// Base address of Timer Group 0 (TIMG0) — used for the RTOS tick.
+// This is fixed on all ESP32-S3 silicon.
+#ifndef RTOS_TIMG0_BASE_ADDR
+#   define RTOS_TIMG0_BASE_ADDR   0x6001F000UL
+#endif
+
 // Special timeout values
 #define RTOS_WAIT_FOREVER   ((uint32_t)0xFFFFFFFFUL)
 #define RTOS_NO_WAIT        ((uint32_t)0UL)
