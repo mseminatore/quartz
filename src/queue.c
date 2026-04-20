@@ -1,5 +1,8 @@
+//---------------------------------------------------------------------------
 // Copyright 2025. All rights reserved.
+//
 // Message queue implementation (fixed-size items, static circular buffer).
+//---------------------------------------------------------------------------
 #include <stdint.h>
 #include <string.h>
 #include "../include/rtos_queue.h"
@@ -12,12 +15,19 @@ extern void         rtos_task_make_ready(rtos_tcb_t *tcb);
 
 #define current_task() (*rtos_current_tcb_ptr())
 
+//---------------------------------------------------------------------------
+// Create a queue. The caller must provide storage for the queue struct and 
+// the buffer, which can be on the caller's stack or in static memory. Returns 
+// a handle to the queue, or NULL on failure (e.g. invalid parameters). The 
+// queue is created empty.
+//---------------------------------------------------------------------------
 rtos_handle_t xQueueCreate(rtos_queue_t *queue,
                             void         *buf,
                             size_t        item_size,
                             size_t        capacity)
 {
     if (!queue || !buf || item_size == 0 || capacity == 0) return NULL;
+
     queue->buf       = (uint8_t *)buf;
     queue->item_size = item_size;
     queue->capacity  = capacity;
@@ -26,9 +36,17 @@ rtos_handle_t xQueueCreate(rtos_queue_t *queue,
     queue->tail      = 0;
     queue->send_wait = NULL;
     queue->recv_wait = NULL;
+
     return (rtos_handle_t)queue;
 }
 
+//---------------------------------------------------------------------------
+// Send an item to the queue. If the queue is not full, copies the item into the
+// queue and returns OK. If the queue is full, blocks the current task until either
+// space is available (in which case the item is copied and the task returns OK) or
+// the timeout expires (in which case the task returns TIMEOUT). If timeout_ticks is
+// RTOS_NO_WAIT, do not block and return TIMEOUT immediately if the queue is full.
+//---------------------------------------------------------------------------
 int xQueueSend(rtos_handle_t handle, const void *item, uint32_t timeout_ticks)
 {
     rtos_queue_t *q = (rtos_queue_t *)handle;
@@ -71,6 +89,14 @@ int xQueueSend(rtos_handle_t handle, const void *item, uint32_t timeout_ticks)
     return on_list ? RTOS_TIMEOUT : RTOS_OK;
 }
 
+//---------------------------------------------------------------------------
+// Receive an item from the queue. If the queue is not empty, copies the item
+// from the queue into the provided buffer and returns OK. If the queue is empty,
+// blocks the current task until either an item is sent to the queue (in which case
+// the item is copied and the task returns OK) or the timeout expires (in which case
+// the task returns TIMEOUT). If timeout_ticks is RTOS_NO_WAIT, do not block 
+// and return TIMEOUT immediately if the queue is empty.
+//---------------------------------------------------------------------------
 int xQueueReceive(rtos_handle_t handle, void *item, uint32_t timeout_ticks)
 {
     rtos_queue_t *q = (rtos_queue_t *)handle;
@@ -113,6 +139,11 @@ int xQueueReceive(rtos_handle_t handle, void *item, uint32_t timeout_ticks)
     return on_list ? RTOS_TIMEOUT : RTOS_OK;
 }
 
+//---------------------------------------------------------------------------
+// Send an item to the queue from an ISR. Same behavior as xQueueSend(), but 
+// does not call port_request_reschedule() — the caller is responsible for 
+// triggering a reschedule if a higher-priority task was unblocked.
+//---------------------------------------------------------------------------
 int xQueueSendFromISR(rtos_handle_t handle, const void *item)
 {
     rtos_queue_t *q = (rtos_queue_t *)handle;
@@ -128,6 +159,9 @@ int xQueueSendFromISR(rtos_handle_t handle, const void *item)
     return RTOS_OK;
 }
 
+//---------------------------------------------------------------------------
+// Get the number of items currently in the queue.
+//---------------------------------------------------------------------------
 size_t xQueueMessagesWaiting(rtos_handle_t handle)
 {
     rtos_queue_t *q = (rtos_queue_t *)handle;

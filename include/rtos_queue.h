@@ -1,5 +1,8 @@
+//---------------------------------------------------------------------------
 // Copyright 2025. All rights reserved.
+//
 // Message queue API (fixed-size items, static circular buffer).
+//---------------------------------------------------------------------------
 #ifndef RTOS_QUEUE_H
 #define RTOS_QUEUE_H
 

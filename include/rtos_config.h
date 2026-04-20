@@ -1,6 +1,9 @@
+//---------------------------------------------------------------------------
 // Copyright 2025. All rights reserved.
+//
 // Compile-time configuration for the RTOS.
 // Override any of these by defining them before including rtos.h.
+//---------------------------------------------------------------------------
 #ifndef RTOS_CONFIG_H
 #define RTOS_CONFIG_H
 

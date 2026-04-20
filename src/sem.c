@@ -1,5 +1,8 @@
+//---------------------------------------------------------------------------
 // Copyright 2025. All rights reserved.
+//
 // Semaphore implementation (binary and counting).
+//---------------------------------------------------------------------------
 #include <stdint.h>
 #include "../include/rtos_sem.h"
 #include "list.h"
@@ -11,26 +14,49 @@ extern void         rtos_task_make_ready(rtos_tcb_t *tcb);
 
 #define current_task() (*rtos_current_tcb_ptr())
 
+//---------------------------------------------------------------------------
+// Create a binary semaphore. The caller must provide storage for the semaphore
+// struct, which can be on the caller's stack or in static memory. Returns a handle
+// to the semaphore, or NULL on failure. The semaphore is created with count 0 (empty).
+//---------------------------------------------------------------------------
 rtos_handle_t xSemaphoreCreateBinary(rtos_sem_t *sem)
 {
     if (!sem) return NULL;
+
     sem->count     = 0;
     sem->max_count = 1;
     sem->wait_list = NULL;
+
     return (rtos_handle_t)sem;
 }
 
+//---------------------------------------------------------------------------
+// Create a counting semaphore. The caller must provide storage for the semaphore
+// struct, which can be on the caller's stack or in static memory. Returns a handle
+// to the semaphore, or NULL on failure (e.g. invalid parameters). The semaphore is
+// created with the specified initial count.
+//---------------------------------------------------------------------------
 rtos_handle_t xSemaphoreCreateCounting(rtos_sem_t *sem,
                                         uint32_t    max_count,
                                         uint32_t    initial_count)
 {
     if (!sem || max_count == 0 || initial_count > max_count) return NULL;
+
     sem->count     = initial_count;
     sem->max_count = max_count;
     sem->wait_list = NULL;
+
     return (rtos_handle_t)sem;
 }
 
+//---------------------------------------------------------------------------
+// Take a semaphore. If the semaphore count is >0, decrement it and return OK.
+// If the count is 0, block the current task until either the semaphore is given
+// (in which case the count is not incremented, but the task is unblocked and
+// returns OK) or the timeout expires (in which case the task is unblocked and
+// returns TIMEOUT). If timeout_ticks is RTOS_NO_WAIT, do not block and return
+// TIMEOUT immediately if the semaphore is not available.
+//---------------------------------------------------------------------------
 int xSemaphoreTake(rtos_handle_t handle, uint32_t timeout_ticks)
 {
     rtos_sem_t *sem = (rtos_sem_t *)handle;
@@ -69,6 +95,13 @@ int xSemaphoreTake(rtos_handle_t handle, uint32_t timeout_ticks)
     return on_list ? RTOS_TIMEOUT : RTOS_OK;
 }
 
+//---------------------------------------------------------------------------
+// Give a semaphore. If there are tasks blocked waiting for the semaphore, unblock
+// the highest-priority one and do not increment the count. Otherwise, if the count
+// is less than max_count, increment it. If the count is already at max_count,
+// does nothing. Unblocking a task may cause a context switch if the unblocked task
+// has higher priority than the current task.
+//---------------------------------------------------------------------------
 void xSemaphoreGive(rtos_handle_t handle)
 {
     rtos_sem_t *sem = (rtos_sem_t *)handle;
@@ -77,10 +110,12 @@ void xSemaphoreGive(rtos_handle_t handle)
     port_enter_critical();
 
     rtos_tcb_t *waiter = list_pop_head(&sem->wait_list);
-    if (waiter) {
+    if (waiter) 
+    {
         // Hand the token directly to the waiter — do not increment count.
         rtos_task_make_ready(waiter);
-    } else if (sem->count < sem->max_count) {
+    } else if (sem->count < sem->max_count) 
+    {
         sem->count++;
     }
 
@@ -88,6 +123,11 @@ void xSemaphoreGive(rtos_handle_t handle)
     port_request_reschedule();
 }
 
+//---------------------------------------------------------------------------
+// Give a semaphore from an ISR. Same behavior as xSemaphoreGive(), but does 
+// not call port_request_reschedule() — the caller is responsible for triggering 
+// a reschedule if a higher-priority task was unblocked.
+//---------------------------------------------------------------------------
 void xSemaphoreGiveFromISR(rtos_handle_t handle)
 {
     rtos_sem_t *sem = (rtos_sem_t *)handle;

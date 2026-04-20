@@ -1,5 +1,8 @@
+//---------------------------------------------------------------------------
 // Copyright 2025. All rights reserved.
+//
 // Master include — pull in the full RTOS API via a single header.
+//---------------------------------------------------------------------------
 #ifndef RTOS_H
 #define RTOS_H
 

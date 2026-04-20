@@ -1,5 +1,8 @@
+//---------------------------------------------------------------------------
 // Copyright 2025. All rights reserved.
+//
 // Port interface — implemented per architecture in port/<arch>/port.c and port_asm.S.
+//---------------------------------------------------------------------------
 #ifndef RTOS_PORT_H
 #define RTOS_PORT_H
 

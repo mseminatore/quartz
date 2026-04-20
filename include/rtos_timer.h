@@ -1,5 +1,8 @@
+//---------------------------------------------------------------------------
 // Copyright 2025. All rights reserved.
+//
 // Software timer API (tick-driven, periodic and one-shot).
+//---------------------------------------------------------------------------
 #ifndef RTOS_TIMER_H
 #define RTOS_TIMER_H
 

@@ -1,5 +1,8 @@
+//---------------------------------------------------------------------------
 // Copyright 2025. All rights reserved.
+//
 // Mutex implementation (non-recursive).
+//---------------------------------------------------------------------------
 #include <stdint.h>
 #include "../include/rtos_mutex.h"
 #include "list.h"
@@ -11,6 +14,11 @@ extern void         rtos_task_make_ready(rtos_tcb_t *tcb);
 
 #define current_task() (*rtos_current_tcb_ptr())
 
+//---------------------------------------------------------------------------
+// Create a mutex. The caller must provide storage for the mutex struct, which
+// can be on the caller's stack or in static memory. Returns a handle to the mutex,
+// or NULL on failure. The mutex is created in the unlocked state.
+//---------------------------------------------------------------------------
 rtos_handle_t xMutexCreate(rtos_mutex_t *mutex)
 {
     if (!mutex) return NULL;
@@ -19,6 +27,14 @@ rtos_handle_t xMutexCreate(rtos_mutex_t *mutex)
     return (rtos_handle_t)mutex;
 }
 
+//---------------------------------------------------------------------------
+// Lock a mutex. If the mutex is unlocked, locks it and returns OK. If the 
+// mutex is already locked by another task, blocks the current task until 
+// either the mutex is unlocked (in which case the task acquires the mutex 
+// and returns OK) or the timeout expires (in which case the task returns 
+// TIMEOUT). If timeout_ticks is RTOS_NO_WAIT, do not block and return TIMEOUT 
+// immediately if the mutex is already locked.
+//---------------------------------------------------------------------------
 int xMutexLock(rtos_handle_t handle, uint32_t timeout_ticks)
 {
     rtos_mutex_t *mutex = (rtos_mutex_t *)handle;
@@ -53,6 +69,12 @@ int xMutexLock(rtos_handle_t handle, uint32_t timeout_ticks)
     return on_list ? RTOS_TIMEOUT : RTOS_OK;
 }
 
+//---------------------------------------------------------------------------
+// Unlock a mutex. If there are tasks blocked waiting for the mutex, unblocks
+// the highest-priority one and gives it the mutex. Otherwise, sets the mutex to
+// the unlocked state. The caller must be the task currently holding the mutex;
+// behavior is undefined if this is not the case.
+//---------------------------------------------------------------------------
 void xMutexUnlock(rtos_handle_t handle)
 {
     rtos_mutex_t *mutex = (rtos_mutex_t *)handle;
