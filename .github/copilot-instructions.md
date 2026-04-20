@@ -34,20 +34,20 @@ This is a small preemptive RTOS written in C11 with no dynamic allocation.
 
 **Tick path:** port ISR → `rtos_tick_handler()` → unblocks tasks + fires timers → `port_request_reschedule()` → deferred context switch (PendSV on ARM, inline on AVR/RISC-V).
 
-**Static allocation pattern:** every kernel object (`rtos_tcb_t`, `rtos_sem_t`, `rtos_mutex_t`, `rtos_queue_t`, `rtos_timer_t`) is allocated by the *caller* as a static variable and passed by pointer to the `x…Create` function. The kernel never calls `malloc`.
+**Static allocation pattern:** every kernel object (`rtos_tcb_t`, `rtos_sem_t`, `rtos_mutex_t`, `rtos_queue_t`, `rtos_timer_t`) is allocated by the *caller* as a static variable and passed by pointer to the `rtos_*_create` function. The kernel never calls `malloc`.
 
 ## Key Conventions
 
 **Naming:**
-- Public API follows FreeRTOS conventions: `xTaskCreate`, `vTaskDelay`, `xSemaphoreTake`, etc. (`x` prefix returns a handle/value; `v` prefix is void).
+- Public API uses `rtos_` prefix with full snake_case words: `rtos_task_create`, `rtos_task_delay`, `rtos_semaphore_take`, `rtos_mutex_lock`, `rtos_queue_send`, `rtos_timer_start`, `rtos_start`.
 - Internal kernel symbols use lowercase with underscores: `ready_add`, `scheduler_pick_next`, `rtos_tick_handler`.
 - Port-layer symbols are prefixed `port_`: `port_init`, `port_init_stack`, `port_enter_critical`, `port_exit_critical`, `port_request_reschedule`, `port_start_first_task`.
 
 **Priority:** lower numeric value = higher priority (0 is highest). `RTOS_MAX_PRIORITIES - 1` is reserved for the idle task.
 
-**Handles:** `rtos_handle_t` is `void *`; it always points to the underlying struct (e.g., the `rtos_tcb_t`). Passing `NULL` to task functions (`vTaskDelete`, `vTaskSuspend`) targets the current task.
+**Handles:** `rtos_handle_t` is `void *`; it always points to the underlying struct (e.g., the `rtos_tcb_t`). Passing `NULL` to task functions (`rtos_task_delete`, `rtos_task_suspend`) targets the current task.
 
-**Return codes:** functions that can fail return `RTOS_OK` (0), `RTOS_ERR` (-1), or `RTOS_TIMEOUT` (-2); `x…Create` functions return `NULL` on failure.
+**Return codes:** functions that can fail return `RTOS_OK` (0), `RTOS_ERR` (-1), or `RTOS_TIMEOUT` (-2); `rtos_*_create` functions return `NULL` on failure.
 
 **`stack_words` parameter:** counts units of `RTOS_STACK_BYTES_PER_WORD` (4 on 32-bit, 1 on AVR). Stacks must be declared as `uint32_t[]` on 32-bit targets and `uint8_t[]` on AVR.
 

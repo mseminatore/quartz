@@ -15,11 +15,11 @@ static rtos_timer_t *g_timer_list = NULL;  // singly-linked active timer list
 // to the timer, or NULL on failure (e.g. invalid parameters). The timer is 
 // created in the inactive state; call xTimerStart() to start it.
 //---------------------------------------------------------------------------
-rtos_handle_t xTimerCreate(rtos_timer_t *timer,
-                            const char   *name,
-                            uint32_t      period_ticks,
-                            int           periodic,
-                            void        (*cb)(rtos_handle_t timer))
+rtos_handle_t rtos_timer_create(rtos_timer_t *timer,
+                                const char   *name,
+                                uint32_t      period_ticks,
+                                int           periodic,
+                                void        (*cb)(rtos_handle_t timer))
 {
     if (!timer || !cb || period_ticks == 0) return NULL;
 
@@ -41,7 +41,7 @@ rtos_handle_t xTimerCreate(rtos_timer_t *timer,
 //---------------------------------------------------------------------------
 // Start a timer. If the timer is already active, this has no effect.
 //---------------------------------------------------------------------------
-void xTimerStart(rtos_handle_t handle)
+void rtos_timer_start(rtos_handle_t handle)
 {
     rtos_timer_t *timer = (rtos_timer_t *)handle;
     if (!timer || timer->active) return;
@@ -59,7 +59,7 @@ void xTimerStart(rtos_handle_t handle)
 //---------------------------------------------------------------------------
 // Stop a timer. If the timer is not active, this has no effect.
 //---------------------------------------------------------------------------
-void xTimerStop(rtos_handle_t handle)
+void rtos_timer_stop(rtos_handle_t handle)
 {
     rtos_timer_t *timer = (rtos_timer_t *)handle;
     if (!timer || !timer->active) return;
@@ -88,7 +88,7 @@ void xTimerStop(rtos_handle_t handle)
 //---------------------------------------------------------------------------
 // Reset a timer's count to its period. If the timer is not active, start it.
 //---------------------------------------------------------------------------
-void xTimerReset(rtos_handle_t handle)
+void rtos_timer_reset(rtos_handle_t handle)
 {
     rtos_timer_t *timer = (rtos_timer_t *)handle;
     if (!timer) return;

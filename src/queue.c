@@ -21,10 +21,10 @@ extern void         rtos_task_make_ready(rtos_tcb_t *tcb);
 // a handle to the queue, or NULL on failure (e.g. invalid parameters). The 
 // queue is created empty.
 //---------------------------------------------------------------------------
-rtos_handle_t xQueueCreate(rtos_queue_t *queue,
-                            void         *buf,
-                            size_t        item_size,
-                            size_t        capacity)
+rtos_handle_t rtos_queue_create(rtos_queue_t *queue,
+                                void         *buf,
+                                size_t        item_size,
+                                size_t        capacity)
 {
     if (!queue || !buf || item_size == 0 || capacity == 0) return NULL;
 
@@ -47,7 +47,7 @@ rtos_handle_t xQueueCreate(rtos_queue_t *queue,
 // the timeout expires (in which case the task returns TIMEOUT). If timeout_ticks is
 // RTOS_NO_WAIT, do not block and return TIMEOUT immediately if the queue is full.
 //---------------------------------------------------------------------------
-int xQueueSend(rtos_handle_t handle, const void *item, uint32_t timeout_ticks)
+int rtos_queue_send(rtos_handle_t handle, const void *item, uint32_t timeout_ticks)
 {
     rtos_queue_t *q = (rtos_queue_t *)handle;
     if (!q || !item) return RTOS_ERR;
@@ -97,7 +97,7 @@ int xQueueSend(rtos_handle_t handle, const void *item, uint32_t timeout_ticks)
 // the task returns TIMEOUT). If timeout_ticks is RTOS_NO_WAIT, do not block 
 // and return TIMEOUT immediately if the queue is empty.
 //---------------------------------------------------------------------------
-int xQueueReceive(rtos_handle_t handle, void *item, uint32_t timeout_ticks)
+int rtos_queue_receive(rtos_handle_t handle, void *item, uint32_t timeout_ticks)
 {
     rtos_queue_t *q = (rtos_queue_t *)handle;
     if (!q || !item) return RTOS_ERR;
@@ -132,8 +132,19 @@ int xQueueReceive(rtos_handle_t handle, void *item, uint32_t timeout_ticks)
 
     port_request_reschedule();
 
+    // Re-enter critical section: if we were woken by a sender the item is in
+    // the queue buffer and we need to consume it; if we timed out we are still
+    // on recv_wait and must remove ourselves.
     port_enter_critical();
     int on_list = list_remove(&q->recv_wait, self);
+    if (!on_list && q->count > 0) {
+        memcpy(item, q->buf + q->head * q->item_size, q->item_size);
+        q->head = (q->head + 1) % q->capacity;
+        q->count--;
+        // Unblock a sender that may have been waiting for space
+        rtos_tcb_t *waiter = list_pop_head(&q->send_wait);
+        if (waiter) rtos_task_make_ready(waiter);
+    }
     port_exit_critical();
 
     return on_list ? RTOS_TIMEOUT : RTOS_OK;
@@ -144,7 +155,7 @@ int xQueueReceive(rtos_handle_t handle, void *item, uint32_t timeout_ticks)
 // does not call port_request_reschedule() — the caller is responsible for 
 // triggering a reschedule if a higher-priority task was unblocked.
 //---------------------------------------------------------------------------
-int xQueueSendFromISR(rtos_handle_t handle, const void *item)
+int rtos_queue_send_from_isr(rtos_handle_t handle, const void *item)
 {
     rtos_queue_t *q = (rtos_queue_t *)handle;
     if (!q || !item || q->count >= q->capacity) return RTOS_ERR;
@@ -162,7 +173,7 @@ int xQueueSendFromISR(rtos_handle_t handle, const void *item)
 //---------------------------------------------------------------------------
 // Get the number of items currently in the queue.
 //---------------------------------------------------------------------------
-size_t xQueueMessagesWaiting(rtos_handle_t handle)
+size_t rtos_queue_messages_waiting(rtos_handle_t handle)
 {
     rtos_queue_t *q = (rtos_queue_t *)handle;
     if (!q) return 0;

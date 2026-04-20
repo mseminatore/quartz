@@ -17,18 +17,18 @@ typedef struct {
     rtos_tcb_t  *wait_list;   // tasks blocked waiting to take
 } rtos_sem_t;
 
-rtos_handle_t xSemaphoreCreateBinary(rtos_sem_t *sem);
-rtos_handle_t xSemaphoreCreateCounting(rtos_sem_t *sem,
-                                        uint32_t max_count,
-                                        uint32_t initial_count);
+rtos_handle_t rtos_semaphore_create_binary(rtos_sem_t *sem);
+rtos_handle_t rtos_semaphore_create_counting(rtos_sem_t *sem,
+                                              uint32_t    max_count,
+                                              uint32_t    initial_count);
 
 // Take (decrement). Returns RTOS_OK on success, RTOS_TIMEOUT if timed out.
-int  xSemaphoreTake(rtos_handle_t sem, uint32_t timeout_ticks);
+int  rtos_semaphore_take(rtos_handle_t sem, uint32_t timeout_ticks);
 
 // Give (increment). Unblocks the highest-priority waiter if any.
-void xSemaphoreGive(rtos_handle_t sem);
+void rtos_semaphore_give(rtos_handle_t sem);
 
 // ISR-safe Give. Does not reschedule; call port_request_reschedule() after if needed.
-void xSemaphoreGiveFromISR(rtos_handle_t sem);
+void rtos_semaphore_give_from_isr(rtos_handle_t sem);
 
 #endif // RTOS_SEM_H

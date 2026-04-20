@@ -14,6 +14,6 @@
 #include "rtos_timer.h"
 
 // Start the scheduler. This function never returns.
-void vRTOSStart(void);
+void rtos_start(void);
 
 #endif // RTOS_H

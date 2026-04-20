@@ -127,4 +127,16 @@ if(NOT RTOS_TARGET_PICO AND NOT RTOS_TARGET_AVR AND NOT RTOS_TARGET_RISCV AND NO
     target_compile_options(rtos_test PRIVATE -fno-builtin)
 
     add_test(NAME rtos_test COMMAND rtos_test)
+
+    # ---------------------------------------------------------------------------
+    # Sample programs (host simulation — hardware calls are stubbed inside each file)
+    # ---------------------------------------------------------------------------
+
+    foreach(sample blink producer_consumer mutex_shared_resource)
+        add_executable(sample_${sample} samples/${sample}.c
+                       ${RTOS_KERNEL_SOURCES}
+                       port/host/port.c)
+        target_include_directories(sample_${sample} PRIVATE include src)
+        target_compile_options(sample_${sample} PRIVATE -fno-builtin)
+    endforeach()
 endif()

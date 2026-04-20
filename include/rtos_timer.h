@@ -24,15 +24,15 @@ typedef struct rtos_timer {
     struct rtos_timer *next;           // intrusive list link
 } rtos_timer_t;
 
-rtos_handle_t xTimerCreate(rtos_timer_t *timer,
-                            const char   *name,
-                            uint32_t      period_ticks,
-                            int           periodic,
-                            void        (*cb)(rtos_handle_t timer));
+rtos_handle_t rtos_timer_create(rtos_timer_t *timer,
+                                const char   *name,
+                                uint32_t      period_ticks,
+                                int           periodic,
+                                void        (*cb)(rtos_handle_t timer));
 
-void xTimerStart(rtos_handle_t timer);
-void xTimerStop(rtos_handle_t timer);
-void xTimerReset(rtos_handle_t timer);   // restart countdown from full period
+void rtos_timer_start(rtos_handle_t timer);
+void rtos_timer_stop(rtos_handle_t timer);
+void rtos_timer_reset(rtos_handle_t timer);   // restart countdown from full period
 
 // Called by the tick handler — not part of the public application API.
 void rtos_timer_tick(void);

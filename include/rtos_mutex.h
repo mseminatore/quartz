@@ -16,12 +16,12 @@ typedef struct {
     rtos_tcb_t  *wait_list;   // tasks blocked waiting to acquire
 } rtos_mutex_t;
 
-rtos_handle_t xMutexCreate(rtos_mutex_t *mutex);
+rtos_handle_t rtos_mutex_create(rtos_mutex_t *mutex);
 
 // Acquire. Returns RTOS_OK, or RTOS_TIMEOUT if timed out.
-int  xMutexLock(rtos_handle_t mutex, uint32_t timeout_ticks);
+int  rtos_mutex_lock(rtos_handle_t mutex, uint32_t timeout_ticks);
 
 // Release. Unblocks the highest-priority waiter if any.
-void xMutexUnlock(rtos_handle_t mutex);
+void rtos_mutex_unlock(rtos_handle_t mutex);
 
 #endif // RTOS_MUTEX_H

@@ -31,7 +31,7 @@ static void idle_task(void *arg)
 {
     (void)arg;
     for (;;)
-        ; // could WFI here on real hardware
+        port_request_reschedule();  // WFI on real hardware; advances clock on host
 }
 
 //[]---------------------------------------------------------------------------[]
@@ -92,13 +92,13 @@ static rtos_tcb_t *scheduler_pick_next(void)
 // stack or in static memory. The task will be added to the ready list and 
 // may run immediately if it has higher priority than the current task.
 //---------------------------------------------------------------------------
-rtos_handle_t xTaskCreate(rtos_tcb_t *tcb,
-                           void       *stack,
-                           size_t      stack_words,
-                           void      (*func)(void *),
-                           void       *arg,
-                           const char *name,
-                           uint8_t     priority)
+rtos_handle_t rtos_task_create(rtos_tcb_t *tcb,
+                               void       *stack,
+                               size_t      stack_words,
+                               void      (*func)(void *),
+                               void       *arg,
+                               const char *name,
+                               uint8_t     priority)
 {
     if (!tcb || !stack || !func || priority >= RTOS_MAX_PRIORITIES)
         return NULL;
@@ -134,10 +134,10 @@ rtos_handle_t xTaskCreate(rtos_tcb_t *tcb,
 //---------------------------------------------------------------------------
 // Delay the current task for a number of ticks. If ticks is 0, yield instead.
 //---------------------------------------------------------------------------
-void vTaskDelay(uint32_t ticks)
+void rtos_task_delay(uint32_t ticks)
 {
     if (ticks == 0) {
-        vTaskYield();
+        rtos_task_yield();
         return;
     }
 
@@ -155,7 +155,7 @@ void vTaskDelay(uint32_t ticks)
 // Yield the CPU to another ready task of the same priority, if any. Otherwise
 // does nothing.
 //---------------------------------------------------------------------------
-void vTaskYield(void)
+void rtos_task_yield(void)
 {
     port_request_reschedule();
 }
@@ -164,7 +164,7 @@ void vTaskYield(void)
 // Suspend a task, preventing it from running until resumed. If task is NULL,
 // suspend the current task. If the task is already suspended, does nothing.
 //---------------------------------------------------------------------------
-void vTaskSuspend(rtos_handle_t task)
+void rtos_task_suspend(rtos_handle_t task)
 {
     rtos_tcb_t *tcb = task ? (rtos_tcb_t *)task : g_current;
 
@@ -189,7 +189,7 @@ void vTaskSuspend(rtos_handle_t task)
 // Resume a suspended task, making it ready to run. If the task is not 
 // suspended, does nothing.
 //---------------------------------------------------------------------------
-void vTaskResume(rtos_handle_t task)
+void rtos_task_resume(rtos_handle_t task)
 {
     rtos_tcb_t *tcb = (rtos_tcb_t *)task;
 
@@ -209,7 +209,7 @@ void vTaskResume(rtos_handle_t task)
 // If the current task is deleted, the scheduler will immediately switch to another
 // ready task.
 //---------------------------------------------------------------------------
-void vTaskDelete(rtos_handle_t task)
+void rtos_task_delete(rtos_handle_t task)
 {
     rtos_tcb_t *tcb = task ? (rtos_tcb_t *)task : g_current;
 
@@ -234,7 +234,7 @@ void vTaskDelete(rtos_handle_t task)
 // Get the current tick count, which increments at a constant rate defined by
 // RTOS_TICK_RATE_HZ. Used for timing and delays.
 //---------------------------------------------------------------------------
-uint32_t xTaskGetTickCount(void)
+uint32_t rtos_task_tick_count(void)
 {
     return g_tick_count;
 }
@@ -299,7 +299,7 @@ void rtos_context_switch(void)
 static void rtos_scheduler_start(void)
 {
     // Create the idle task at the lowest priority
-    xTaskCreate(&g_idle_tcb, g_idle_stack, RTOS_IDLE_STACK_WORDS, idle_task, NULL,
+    rtos_task_create(&g_idle_tcb, g_idle_stack, RTOS_IDLE_STACK_WORDS, idle_task, NULL,
                 "idle", RTOS_MAX_PRIORITIES - 1);
 
     // Pick the first task and hand control to the port
@@ -310,9 +310,9 @@ static void rtos_scheduler_start(void)
 }
 
 //---------------------------------------------------------------------------
-// vRTOSStart — initialise the port and start the scheduler. Never returns.
+// rtos_start — initialise the port and start the scheduler. Never returns.
 //---------------------------------------------------------------------------
-void vRTOSStart(void)
+void rtos_start(void)
 {
     extern void port_init(uint32_t tick_rate_hz);
     extern void port_start_first_task(void);

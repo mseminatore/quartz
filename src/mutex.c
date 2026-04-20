@@ -19,7 +19,7 @@ extern void         rtos_task_make_ready(rtos_tcb_t *tcb);
 // can be on the caller's stack or in static memory. Returns a handle to the mutex,
 // or NULL on failure. The mutex is created in the unlocked state.
 //---------------------------------------------------------------------------
-rtos_handle_t xMutexCreate(rtos_mutex_t *mutex)
+rtos_handle_t rtos_mutex_create(rtos_mutex_t *mutex)
 {
     if (!mutex) return NULL;
     mutex->owner     = NULL;
@@ -35,20 +35,22 @@ rtos_handle_t xMutexCreate(rtos_mutex_t *mutex)
 // TIMEOUT). If timeout_ticks is RTOS_NO_WAIT, do not block and return TIMEOUT 
 // immediately if the mutex is already locked.
 //---------------------------------------------------------------------------
-int xMutexLock(rtos_handle_t handle, uint32_t timeout_ticks)
+int rtos_mutex_lock(rtos_handle_t handle, uint32_t timeout_ticks)
 {
     rtos_mutex_t *mutex = (rtos_mutex_t *)handle;
     if (!mutex) return RTOS_ERR;
 
     port_enter_critical();
 
-    if (!mutex->owner) {
+    if (!mutex->owner) 
+    {
         mutex->owner = current_task();
         port_exit_critical();
         return RTOS_OK;
     }
 
-    if (timeout_ticks == RTOS_NO_WAIT) {
+    if (timeout_ticks == RTOS_NO_WAIT) 
+    {
         port_exit_critical();
         return RTOS_TIMEOUT;
     }
@@ -58,6 +60,7 @@ int xMutexLock(rtos_handle_t handle, uint32_t timeout_ticks)
     self->state       = TASK_BLOCKED;
     self->delay_ticks = timeout_ticks;
     list_insert_tail(&mutex->wait_list, self);
+    
     port_exit_critical();
 
     port_request_reschedule();
@@ -75,7 +78,7 @@ int xMutexLock(rtos_handle_t handle, uint32_t timeout_ticks)
 // the unlocked state. The caller must be the task currently holding the mutex;
 // behavior is undefined if this is not the case.
 //---------------------------------------------------------------------------
-void xMutexUnlock(rtos_handle_t handle)
+void rtos_mutex_unlock(rtos_handle_t handle)
 {
     rtos_mutex_t *mutex = (rtos_mutex_t *)handle;
     if (!mutex) return;
@@ -83,10 +86,12 @@ void xMutexUnlock(rtos_handle_t handle)
     port_enter_critical();
 
     rtos_tcb_t *waiter = list_pop_head(&mutex->wait_list);
-    if (waiter) {
+    if (waiter) 
+    {
         mutex->owner = waiter;
         rtos_task_make_ready(waiter);
-    } else {
+    } else 
+    {
         mutex->owner = NULL;
     }
 
