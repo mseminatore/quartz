@@ -224,3 +224,29 @@ void port_init(uint32_t tick_rate_hz)
 }
 
 // port_start_first_task is implemented in port_asm.S.
+
+// ---------------------------------------------------------------------------
+// port_cpu_idle — use WAITI 0 to wait until an enabled interrupt arrives.
+// WAITI sets INTLEVEL=0 (all enabled interrupts can fire) and halts the CPU.
+// ---------------------------------------------------------------------------
+
+void port_cpu_idle(void)
+{
+    __asm__ volatile("waiti 0");
+}
+
+// ---------------------------------------------------------------------------
+// port_core_id — returns the current CPU core index from the PRID register.
+// On ESP32-S3 PRID bit 13 distinguishes PRO_CPU (0) from APP_CPU (1).
+// ---------------------------------------------------------------------------
+
+uint8_t port_core_id(void)
+{
+#if RTOS_NUM_CORES > 1
+    uint32_t prid;
+    __asm__ volatile("rsr.prid %0" : "=a"(prid));
+    return (uint8_t)((prid >> 13) & 1u);
+#else
+    return 0;
+#endif
+}

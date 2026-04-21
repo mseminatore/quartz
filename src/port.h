@@ -32,6 +32,24 @@ void port_request_reschedule(void);
 // This function never returns.
 void port_start_first_task(void);
 
+// Idle power hint: put the CPU into a low-power sleep state until the next
+// interrupt arrives (WFI / sleep_cpu / equivalent).  Returns immediately on
+// single-threaded simulation targets.  Must not disable the tick interrupt.
+// Called from the idle task; the tick ISR will wake the CPU on the next tick.
+void port_cpu_idle(void);
+
+// Tickless sleep: re-program the tick timer to fire after at most max_ticks
+// ticks, execute the CPU idle instruction, then return the number of ticks
+// actually elapsed (may be less than max_ticks if another interrupt fired).
+// Implement this only when RTOS_TICKLESS_IDLE=1 is desired for your port.
+// The default stub (in task.c) returns 0 (no ticks suppressed).
+uint32_t port_suppress_ticks(uint32_t max_ticks);
+
+// Return the current CPU core index (0-based).  On single-core targets,
+// always returns 0.  On dual-core targets (RP2040, ESP32-S3) this reads
+// a hardware register (SIO CPUID / PRID).
+uint8_t port_core_id(void);
+
 // Called by the port's tick ISR — advances the tick count, unblocks delayed
 // tasks, and fires software timers.
 void rtos_tick_handler(void);

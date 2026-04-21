@@ -86,4 +86,58 @@
 #define RTOS_ERR   -1
 #define RTOS_TIMEOUT -2
 
+// --------------------------------------------------------------------------
+// Debug and instrumentation options
+// --------------------------------------------------------------------------
+
+// Stack overflow detection: fill the bottom 4 words of each task stack with a
+// sentinel value and check the first sentinel word each tick.
+// Call rtos_stack_overflow_hook() (weak, user-overridable) on detection.
+#ifndef RTOS_STACK_OVERFLOW_CHECK
+#   define RTOS_STACK_OVERFLOW_CHECK  1
+#endif
+
+// Stack high-water mark: fill the *entire* task stack with a pattern on
+// creation so that rtos_task_stack_high_water_mark() can report peak usage.
+// Costs additional time at task creation. Off by default.
+#ifndef RTOS_STACK_WATERMARK
+#   define RTOS_STACK_WATERMARK  0
+#endif
+
+// Trace hook system: define to 1 to enable RTOS_TRACE_* callsites in the
+// kernel. When 0, all macros expand to ((void)0) with zero overhead.
+// Define the rtos_trace_* functions in your application to receive events.
+#ifndef RTOS_ENABLE_TRACE
+#   define RTOS_ENABLE_TRACE  0
+#endif
+
+// Runtime CPU statistics: adds a runtime_ticks counter to each TCB and
+// provides rtos_task_get_runtime_stats(). Off by default.
+#ifndef RTOS_ENABLE_RUNTIME_STATS
+#   define RTOS_ENABLE_RUNTIME_STATS  0
+#endif
+
+// Idle hook: define to the name of a void fn(void) that the idle task will
+// call on every iteration. Typical uses: watchdog kick, heartbeat LED.
+// Example:  #define RTOS_IDLE_HOOK_FUNCTION  my_idle_hook
+// (leave undefined for no hook)
+
+// Tickless idle: when 1, the idle task computes the time until the next
+// task wakeup and calls port_suppress_ticks() to sleep for that duration.
+// Requires port_suppress_ticks() to be implemented for your architecture.
+#ifndef RTOS_TICKLESS_IDLE
+#   define RTOS_TICKLESS_IDLE  0
+#endif
+
+// --------------------------------------------------------------------------
+// Multi-core (AMP) options
+// --------------------------------------------------------------------------
+
+// Number of CPU cores. 1 = single core (default).
+// Set to 2 for dual-core targets (RP2040, ESP32-S3) to enable per-core
+// scheduler state and spinlock-backed critical sections.
+#ifndef RTOS_NUM_CORES
+#   define RTOS_NUM_CORES  1
+#endif
+
 #endif // RTOS_CONFIG_H

@@ -239,6 +239,21 @@ void port_start_first_task(void)
 }
 
 // ---------------------------------------------------------------------------
+// port_cpu_idle / port_core_id
+//
+// AVR sleep requires the application to configure the sleep mode (SM bits in
+// SMCR) and set SE before calling sleep_cpu().  Because sleep configuration
+// is board-specific, we rely on the weak no-op stubs in task.c by default.
+// Applications that want WFI-style idle should override port_cpu_idle() in
+// their own source file:
+//
+//   #include <avr/sleep.h>
+//   void port_cpu_idle(void) { sleep_mode(); }
+//
+// port_core_id always returns 0 (AVR is single-core; inherited from weak stub).
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
 // Timer1 COMPA ISR — tick + context switch.
 //
 // ISR_NAKED: avr-libc generates the vector table entry but adds NO prologue
@@ -257,7 +272,9 @@ void port_start_first_task(void)
 //  8. RETI — pops PC and re-enables interrupts.
 // ---------------------------------------------------------------------------
 
-ISR(TIMER1_COMPA_vect, ISR_NAKED)
+// port_cpu_idle and port_core_id are provided by the weak stubs in task.c.
+// AVR sleep requires SM bits pre-configured by the application; the weak
+// no-op default is safe here since the tick ISR always wakes the CPU.
 {
     asm volatile (
         // ----------------------------------------------------------------

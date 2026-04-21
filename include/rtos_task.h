@@ -39,6 +39,9 @@ typedef struct rtos_tcb {
     uint32_t            delay_ticks;             // countdown for vTaskDelay
     char                name[RTOS_TASK_NAME_LEN];
     struct rtos_tcb    *next;                    // intrusive list link
+#if RTOS_ENABLE_RUNTIME_STATS
+    uint32_t            runtime_ticks;           // total ticks this task has been running
+#endif
 } rtos_tcb_t;
 
 // Create a task. tcb and stack must be static storage provided by the caller.
@@ -66,5 +69,34 @@ void rtos_task_delete(rtos_handle_t task);
 
 // Return the current tick count.
 uint32_t rtos_task_tick_count(void);
+
+// ---------------------------------------------------------------------------
+// Debug / instrumentation APIs
+// ---------------------------------------------------------------------------
+
+// Check whether a task's stack sentinel has been overwritten.
+// Returns RTOS_OK if intact, RTOS_ERR if overflow detected.
+// Only meaningful when RTOS_STACK_OVERFLOW_CHECK is non-zero.
+int rtos_task_check_stack(rtos_handle_t task);
+
+// Return the number of stack words that have never been written (high-water
+// mark). Only meaningful when RTOS_STACK_WATERMARK is non-zero.
+uint32_t rtos_task_stack_high_water_mark(rtos_handle_t task);
+
+// ---------------------------------------------------------------------------
+// Runtime CPU statistics (only when RTOS_ENABLE_RUNTIME_STATS is non-zero)
+// ---------------------------------------------------------------------------
+
+#if RTOS_ENABLE_RUNTIME_STATS
+typedef struct {
+    const char *name;
+    uint32_t    runtime_ticks;
+    uint8_t     percent;          // 0–100 (integer)
+} rtos_runtime_stat_t;
+
+// Fill buf[0..n-1] with stats for all live tasks. Returns number of entries
+// written. Entries are unsorted; the caller may sort by runtime_ticks.
+size_t rtos_task_get_runtime_stats(rtos_runtime_stat_t *buf, size_t n);
+#endif
 
 #endif // RTOS_TASK_H

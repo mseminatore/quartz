@@ -2,6 +2,7 @@
 // ARM Cortex-M0+ port: SysTick init, critical sections, PendSV trigger.
 #include <stdint.h>
 #include "../../src/port.h"
+#include "../../include/rtos_config.h"
 
 // ---------------------------------------------------------------------------
 // Cortex-M0+ System Control Space registers
@@ -13,6 +14,7 @@
 
 #define ICSR        (*((volatile uint32_t *)0xE000ED04))  // Interrupt Control & State
 #define ICSR_PENDSVSET  (1u << 28)
+#define ICSR_PENDSVCLR  (1u << 27)
 
 #define SHPR3       (*((volatile uint32_t *)0xE000ED20))  // System Handler Priority 3
 
@@ -22,16 +24,51 @@
 #endif
 
 // ---------------------------------------------------------------------------
+// RP2040 SIO spinlock support (used for multi-core critical sections)
+// ---------------------------------------------------------------------------
+
+#if RTOS_NUM_CORES > 1
+// SIO base address (RP2040 datasheet §2.3.1)
+#define SIO_BASE            0xD0000000u
+// Spinlock 0 — claim/release by reading/writing the register.
+// Read returns non-zero if the lock was successfully claimed (and atomically
+// marks it taken); write of any value releases the lock.
+#define SIO_SPINLOCK0       (*((volatile uint32_t *)(SIO_BASE + 0x100u)))
+
+static void spinlock_acquire(void)
+{
+    // Spin until we atomically claim spinlock 0
+    while (SIO_SPINLOCK0 == 0u)
+        __asm volatile ("nop");
+    __asm volatile ("dmb" ::: "memory");
+}
+
+static void spinlock_release(void)
+{
+    __asm volatile ("dmb" ::: "memory");
+    SIO_SPINLOCK0 = 0u;   // any write releases the lock
+}
+#endif  // RTOS_NUM_CORES > 1
+
+// ---------------------------------------------------------------------------
 // Critical section (M0+ has no BASEPRI; must disable all interrupts)
+// For multi-core: also acquire a hardware spinlock so that core 1 is
+// excluded from the critical section while core 0 holds it, and vice-versa.
 // ---------------------------------------------------------------------------
 
 void port_enter_critical(void)
 {
     __asm volatile ("cpsid i" ::: "memory");
+#if RTOS_NUM_CORES > 1
+    spinlock_acquire();
+#endif
 }
 
 void port_exit_critical(void)
 {
+#if RTOS_NUM_CORES > 1
+    spinlock_release();
+#endif
     __asm volatile ("cpsie i" ::: "memory");
 }
 
@@ -152,3 +189,90 @@ void port_start_first_task(void)
         ::: "memory"
     );
 }
+
+// ---------------------------------------------------------------------------
+// port_cpu_idle — execute WFI to sleep until the next interrupt.
+// The CPU wakes on SysTick (or any other interrupt), then PendSV fires the
+// context switch as normal.  Must not disable the tick interrupt.
+// ---------------------------------------------------------------------------
+
+void port_cpu_idle(void)
+{
+    __asm volatile ("wfi" ::: "memory");
+}
+
+// ---------------------------------------------------------------------------
+// port_core_id — return the current CPU core index (0 or 1).
+// Reads the SIO CPUID register at 0xD0000000 offset 0x0.
+// Always 0 when RTOS_NUM_CORES == 1 so the compiler can constant-fold it.
+// ---------------------------------------------------------------------------
+
+uint8_t port_core_id(void)
+{
+#if RTOS_NUM_CORES > 1
+    return (uint8_t)(*(volatile uint32_t *)0xD0000000u);
+#else
+    return 0;
+#endif
+}
+
+// ---------------------------------------------------------------------------
+// port_suppress_ticks — tickless idle for ARM Cortex-M0+.
+//
+// Reprograms SysTick to fire after at most max_ticks normal-tick periods,
+// executes WFI to sleep, then measures how many ticks actually elapsed and
+// restores the normal SysTick period before returning.
+//
+// The caller (idle task in task.c) calls rtos_tick_advance(elapsed) to credit
+// those ticks to the scheduler.
+//
+// Preconditions: interrupts are ENABLED when this is called (called from the
+// idle task body, outside critical sections).  SysTick fires even during WFI.
+// ---------------------------------------------------------------------------
+
+#if RTOS_TICKLESS_IDLE
+uint32_t port_suppress_ticks(uint32_t max_ticks)
+{
+    if (max_ticks == 0) return 0;
+
+    // The reload value for one normal tick
+    uint32_t one_tick_reload = (RTOS_CPU_HZ / RTOS_TICK_RATE_HZ) - 1u;
+
+    // Cap to what fits in SysTick's 24-bit counter
+    uint32_t max_reload_24   = 0x00FFFFFFu;
+    uint32_t max_suppressible = max_reload_24 / (one_tick_reload + 1u);
+    if (max_ticks > max_suppressible)
+        max_ticks = max_suppressible;
+
+    uint32_t sleep_reload = (one_tick_reload + 1u) * max_ticks - 1u;
+
+    // Disable SysTick, reprogram for the extended period, re-enable
+    SYST_CSR = 0x00u;              // stop
+    SYST_RVR = sleep_reload;
+    SYST_CVR = 0;                  // clear; reload takes effect on next enable
+    SYST_CSR = 0x07u;              // restart (CLKSRC=processor, TICKINT, ENABLE)
+
+    // Sleep until any interrupt (SysTick or otherwise) fires
+    __asm volatile ("wfi" ::: "memory");
+
+    // Measure how many ticks elapsed based on remaining count
+    uint32_t remaining = SYST_CVR;   // current down-counter value
+    uint32_t elapsed_cycles = sleep_reload - remaining;
+    uint32_t elapsed_ticks  = elapsed_cycles / (one_tick_reload + 1u);
+
+    // If SysTick wrapped (COUNTFLAG set), we slept the full period
+    if (SYST_CSR & (1u << 16))
+        elapsed_ticks = max_ticks;
+
+    // Restore normal SysTick period
+    SYST_CSR = 0x00u;
+    SYST_RVR = one_tick_reload;
+    SYST_CVR = 0;
+    SYST_CSR = 0x07u;
+
+    // Clear any PendSV that fired during the sleep so we don't double-process
+    ICSR = ICSR_PENDSVCLR;
+
+    return elapsed_ticks;
+}
+#endif  // RTOS_TICKLESS_IDLE
