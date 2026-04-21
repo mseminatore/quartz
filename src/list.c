@@ -23,14 +23,19 @@ void list_insert_sorted(rtos_tcb_t **head, rtos_tcb_t *tcb, uint32_t key)
 void list_insert_tail(rtos_tcb_t **head, rtos_tcb_t *tcb)
 {
     tcb->next = NULL;
-    if (!*head) {
+    
+    if (!*head) 
+    {
         *head = tcb;
         return;
     }
+
     rtos_tcb_t *cur = *head;
+
     while (cur->next)
         cur = cur->next;
-    cur->next = tcb;
+
+        cur->next = tcb;
 }
 
 //---------------------------------------------------------------------------
@@ -39,6 +44,7 @@ void list_insert_tail(rtos_tcb_t **head, rtos_tcb_t *tcb)
 int list_remove(rtos_tcb_t **head, rtos_tcb_t *tcb)
 {
     if (!*head) return 0;
+
     if (*head == tcb) 
     {
         *head = tcb->next;

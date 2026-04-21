@@ -21,6 +21,14 @@ typedef enum {
     TASK_DELETED,
 } rtos_task_state_t;
 
+// Priority levels (0 = highest, RTOS_MAX_PRIORITIES - 1 = lowest)
+enum Priority {
+    RTOS_PRIORITY_HIGH = 0,
+    RTOS_PRIORITY_MEDIUM = 1,
+    RTOS_PRIORITY_LOW = 2,
+    RTOS_PRIORITY_IDLE = RTOS_MAX_PRIORITIES - 1,
+};
+
 // Task Control Block — storage provided by the user as a static variable
 typedef struct rtos_tcb {
     void               *sp;                      // saved stack pointer (port-specific type)
