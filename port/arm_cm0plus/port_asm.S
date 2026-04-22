@@ -72,15 +72,28 @@ isr_pendsv:
 
     // -----------------------------------------------------------------------
     // 4. Load new task's SP and restore R4-R11.
+    //
+    // Stack layout: [sp+0..sp+12] = R4-R7, [sp+16..sp+28] = R8-R11
+    //
+    // On CM0+, ldmia only works with low regs (r0-r7), so R8-R11 must be
+    // loaded into r4-r7 first, moved to high regs, then R4-R7 loaded.
     // -----------------------------------------------------------------------
-    ldr     r0, [r1, #0]        // r0 = new task's saved SP
-    ldmia   r0!, {r4-r7}        // restore R4-R7
+    ldr     r0, [r1, #0]        // r0 = new task's saved SP (sp+0 = R4 slot)
+
+    // Load R8-R11 first (at sp+16..sp+28) via low regs, then move to high regs.
+    adds    r0, r0, #16         // r0 = sp+16 (R8 slot)
+    ldmia   r0!, {r4-r7}        // r4=R8, r5=R9, r6=R10, r7=R11; r0 = sp+32
     mov     r8,  r4
     mov     r9,  r5
     mov     r10, r6
-    mov     r11, r7
-    ldmia   r0!, {r4-r7}        // restore R8-R11 (stored in r4-r7 slots)
-    // r0 now points past the 8-word software frame = new PSP
+    mov     r11, r7             // r8-r11 are now correct
+
+    // Reload R4-R7 from sp+0..sp+12.
+    subs    r0, r0, #32         // r0 = sp+0
+    ldmia   r0!, {r4-r7}        // r4=R4, r5=R5, r6=R6, r7=R7; r0 = sp+16
+
+    // Advance PSP to sp+32 (the hardware exception frame).
+    adds    r0, r0, #16         // r0 = sp+32
     msr     psp, r0
 
     // -----------------------------------------------------------------------

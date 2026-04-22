@@ -155,14 +155,20 @@ void SVC_Handler(void)
         "msr   control, r0           \n"
         "isb                         \n"
 
-        // Restore R4-R11 from the software-saved part of the stack
-        "mrs   r0, psp               \n"
-        "ldmia r0!, {r4-r7}          \n"
+        // Restore R4-R11 from the software-saved part of the stack.
+        // Stack layout: [sp+0..sp+12] = R4-R7, [sp+16..sp+28] = R8-R11.
+        // On CM0+, ldmia only works with low regs, so load R8-R11 first
+        // into r4-r7, move to high regs, then load R4-R7.
+        "mrs   r0, psp               \n"  // r0 = sp+0 (R4 slot)
+        "add   r0, #16               \n"  // r0 = sp+16 (R8 slot)
+        "ldmia r0!, {r4-r7}          \n"  // r4=R8, r5=R9, r6=R10, r7=R11; r0 = sp+32
         "mov   r8,  r4               \n"
         "mov   r9,  r5               \n"
         "mov   r10, r6               \n"
-        "mov   r11, r7               \n"
-        "ldmia r0!, {r4-r7}          \n"
+        "mov   r11, r7               \n"  // r8-r11 are now correct
+        "sub   r0,  #32              \n"  // r0 = sp+0
+        "ldmia r0!, {r4-r7}          \n"  // r4=R4, r5=R5, r6=R6, r7=R7; r0 = sp+16
+        "add   r0,  #16              \n"  // r0 = sp+32 (hardware frame)
         "msr   psp, r0               \n"
 
         // EXC_RETURN: return to Thread mode using PSP (legal from exception context)
