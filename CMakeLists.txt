@@ -138,6 +138,19 @@ if(RTOS_TARGET_PICO)
     target_compile_definitions(rtos PRIVATE RTOS_CPU_HZ=${RTOS_CPU_HZ})
 endif()
 
+# Pass optional debug/instrumentation overrides from the parent project.
+foreach(_def
+        RTOS_STACK_OVERFLOW_CHECK
+        RTOS_STACK_WATERMARK
+        RTOS_ENABLE_TRACE
+        RTOS_ENABLE_RUNTIME_STATS
+        RTOS_TICKLESS_IDLE
+        RTOS_NUM_CORES)
+    if(DEFINED ${_def})
+        target_compile_definitions(rtos PUBLIC ${_def}=${${_def}})
+    endif()
+endforeach()
+
 # For AVR, recommend reducing config values in your application's rtos_config.h:
 #   RTOS_MAX_TASKS          4   (2 KB SRAM is tight)
 #   RTOS_MAX_TIMERS         4
