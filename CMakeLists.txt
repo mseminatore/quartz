@@ -17,16 +17,47 @@ cmake_minimum_required(VERSION 3.13)
 #
 # For host unit tests (default, no hardware):
 #   cmake -B build && cmake --build build && ./build/rtos_test
+#
+# As a subdirectory of another CMake project (e.g. a Pico SDK app):
+#   add_subdirectory(deps/rtos)   # Pico SDK must already be initialised
 
-if(DEFINED ENV{PICO_SDK_PATH} OR DEFINED PICO_SDK_PATH)
-    if(NOT DEFINED PICO_SDK_PATH)
-        set(PICO_SDK_PATH $ENV{PICO_SDK_PATH})
+# ---------------------------------------------------------------------------
+# Standalone vs subdirectory — bootstrap only when we are the root project
+# ---------------------------------------------------------------------------
+
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    # Running as the root project: handle SDK / toolchain bootstrapping.
+
+    if(DEFINED ENV{PICO_SDK_PATH} OR DEFINED PICO_SDK_PATH)
+        if(NOT DEFINED PICO_SDK_PATH)
+            set(PICO_SDK_PATH $ENV{PICO_SDK_PATH})
+        endif()
+        include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
+        set(RTOS_TARGET_PICO ON)
+    else()
+        set(RTOS_TARGET_PICO OFF)
     endif()
-    include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
-    set(RTOS_TARGET_PICO ON)
+
+    project(rtos C ASM)
+    set(CMAKE_C_STANDARD 11)
+
+    if(RTOS_TARGET_PICO)
+        pico_sdk_init()
+    endif()
+
 else()
-    set(RTOS_TARGET_PICO OFF)
+    # Running as add_subdirectory(): parent owns project/SDK init.
+    # Detect Pico SDK by checking whether pico_sdk_init() has been called.
+    if(DEFINED PICO_SDK_VERSION_STRING OR TARGET pico_stdlib)
+        set(RTOS_TARGET_PICO ON)
+    else()
+        set(RTOS_TARGET_PICO OFF)
+    endif()
+
 endif()
+
+# Architecture detection (works in both standalone and subdirectory builds
+# because the toolchain file sets CMAKE_SYSTEM_PROCESSOR before project()).
 
 # Detect AVR cross-compile (toolchain file sets CMAKE_SYSTEM_PROCESSOR=avr)
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL "avr")
@@ -47,13 +78,6 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "xtensa-esp32s3")
     set(RTOS_TARGET_ESP32S3 ON)
 else()
     set(RTOS_TARGET_ESP32S3 OFF)
-endif()
-
-project(rtos C ASM)
-set(CMAKE_C_STANDARD 11)
-
-if(RTOS_TARGET_PICO)
-    pico_sdk_init()
 endif()
 
 # ---------------------------------------------------------------------------
@@ -106,7 +130,12 @@ target_compile_options(rtos PRIVATE -fno-builtin)
 
 if(RTOS_TARGET_PICO)
     target_link_libraries(rtos pico_stdlib)
-    target_compile_definitions(rtos PRIVATE RTOS_CPU_HZ=125000000)
+    # Allow the parent project to override RTOS_CPU_HZ (e.g. Pico W uses 133 MHz).
+    # The default is 125 MHz (standard RP2040 / Pico).
+    if(NOT DEFINED RTOS_CPU_HZ)
+        set(RTOS_CPU_HZ 125000000)
+    endif()
+    target_compile_definitions(rtos PRIVATE RTOS_CPU_HZ=${RTOS_CPU_HZ})
 endif()
 
 # For AVR, recommend reducing config values in your application's rtos_config.h:

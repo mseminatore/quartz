@@ -90,6 +90,12 @@ void *port_init_stack(void     *stack_top,
 
 // ---------------------------------------------------------------------------
 // SysTick ISR — increments the tick and triggers PendSV
+//
+// Two symbol names are defined:
+//   SysTick_Handler — used by CMSIS / bare-metal vector tables
+//   isr_systick     — used by the Pico SDK's crt0.S vector table
+// Both point to the same code; the linker picks whichever the vector
+// table references.
 // ---------------------------------------------------------------------------
 
 void SysTick_Handler(void)
@@ -97,6 +103,16 @@ void SysTick_Handler(void)
     extern void rtos_tick_handler(void);
     rtos_tick_handler();
 }
+
+// Provide the Pico SDK alias as a strong symbol so it overrides crt0.S's
+// weak isr_systick stub when building with the Pico SDK.
+void isr_systick(void) __attribute__((alias("SysTick_Handler")));
+
+// Force port_asm.S.o into the link: the PendSV handler is only called by
+// hardware (not by name in C), so without this anchor the linker would
+// silently omit the context-switch assembly entirely.
+extern void PendSV_Handler(void);
+__attribute__((used)) static void * const _port_asm_anchor = (void *)PendSV_Handler;
 
 // ---------------------------------------------------------------------------
 // Port initialisation — configure SysTick and set PendSV to lowest priority
@@ -117,12 +133,15 @@ void port_init(uint32_t tick_rate_hz)
 }
 
 // ---------------------------------------------------------------------------
-// port_start_first_task — switch to PSP and restore the first task's context.
-// Called by vRTOSStart() after the scheduler has set g_current.
+// SVC_Handler — raised by port_start_first_task to enter exception context.
+// From inside an exception we can legally use EXC_RETURN (0xFFFFFFFD) to
+// switch Thread mode to the PSP and restore the first task's context.
 // ---------------------------------------------------------------------------
 
+#define SHPR2       (*((volatile uint32_t *)0xE000ED1C))  // System Handler Priority 2
+
 __attribute__((naked))
-void port_start_first_task(void)
+void SVC_Handler(void)
 {
     __asm volatile (
         // Get g_current->sp (offset 0 in TCB)
@@ -146,9 +165,27 @@ void port_start_first_task(void)
         "ldmia r0!, {r4-r7}          \n"
         "msr   psp, r0               \n"
 
-        // EXC_RETURN: return to Thread mode, PSP, no FPU
+        // EXC_RETURN: return to Thread mode using PSP (legal from exception context)
         "ldr   r0, =0xFFFFFFFD       \n"
         "bx    r0                    \n"
+        ::: "memory"
+    );
+}
+
+// Provide the Pico SDK alias as a strong symbol.
+void isr_svcall(void) __attribute__((alias("SVC_Handler")));
+
+// ---------------------------------------------------------------------------
+// port_start_first_task — raise SVCall to enter exception context, then
+// SVC_Handler performs the actual PSP switch and EXC_RETURN.
+// ---------------------------------------------------------------------------
+
+__attribute__((naked))
+void port_start_first_task(void)
+{
+    __asm volatile (
+        "svc  0        \n"  // enter SVC_Handler (exception context)
+        "bx   lr       \n"  // never reached
         ::: "memory"
     );
 }

@@ -1,5 +1,9 @@
 // Copyright 2025. All rights reserved.
-// ARM Cortex-M0+ context switch — PendSV_Handler.
+// ARM Cortex-M0+ context switch — PendSV_Handler / isr_pendsv.
+//
+// The Pico SDK vector table uses the name isr_pendsv; CMSIS-based projects
+// use PendSV_Handler.  Both are defined below so the linker finds the right
+// symbol regardless of build environment.
 //
 // On exception entry the CPU has already pushed:
 //   { xPSR, PC, LR, R12, R3, R2, R1, R0 }  onto the PSP stack.
@@ -20,11 +24,19 @@
     .thumb
     .text
 
+// Two symbol names are defined for the PendSV handler:
+//   PendSV_Handler — used by CMSIS / bare-metal vector tables
+//   isr_pendsv     — used by the Pico SDK's crt0.S vector table
+// Both are strong symbols pointing to the same code.
+
     .global PendSV_Handler
     .type   PendSV_Handler, %function
+    .global isr_pendsv
+    .type   isr_pendsv, %function
     .thumb_func
 
 PendSV_Handler:
+isr_pendsv:
     // -----------------------------------------------------------------------
     // 1. Save R4-R11 of the outgoing task onto its PSP stack.
     // -----------------------------------------------------------------------
@@ -78,3 +90,4 @@ PendSV_Handler:
     bx      r0
 
     .size PendSV_Handler, . - PendSV_Handler
+    .size isr_pendsv, . - PendSV_Handler
