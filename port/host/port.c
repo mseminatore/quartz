@@ -159,6 +159,37 @@ void port_start_first_task(void)
     }
 }
 
+// ---------------------------------------------------------------------------
+// port_cpu_idle — no-op on the host; tick advancement happens inside
+// port_request_reschedule (which is called immediately after in the idle loop).
+// ---------------------------------------------------------------------------
+
+void port_cpu_idle(void) { }
+
+// ---------------------------------------------------------------------------
+// port_core_id — single-threaded simulation, always core 0.
+// ---------------------------------------------------------------------------
+
+uint8_t port_core_id(void) { return 0; }
+
+// ---------------------------------------------------------------------------
+// port_suppress_ticks — simulated tickless idle for the host port.
+// Sleeps max_ticks milliseconds (one tick = 1 ms on the host) and returns the
+// number of ticks slept.  rtos_tick_advance() in task.c credits them to the
+// scheduler.  The idle task's port_request_reschedule() call that normally
+// follows will NOT deliver another tick (g_delivering_tick guard), so there
+// is no double-counting.
+// ---------------------------------------------------------------------------
+
+#if RTOS_TICKLESS_IDLE
+uint32_t port_suppress_ticks(uint32_t max_ticks)
+{
+    if (max_ticks == 0) return 0;
+    usleep((useconds_t)max_ticks * 1000u);  // 1 tick = 1 ms on the host
+    return max_ticks;
+}
+#endif  // RTOS_TICKLESS_IDLE
+
 #if defined(__APPLE__)
 #  pragma clang diagnostic pop
 #endif

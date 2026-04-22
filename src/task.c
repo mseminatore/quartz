@@ -7,32 +7,115 @@
 #include <stddef.h>
 #include <string.h>
 #include "../include/rtos_task.h"
+#include "../include/rtos_trace.h"
 #include "list.h"
 #include "port.h"
 
 //[]---------------------------------------------------------------------------[]
-// Scheduler state
+// Stack sentinel / watermark constants
 //[]---------------------------------------------------------------------------[]
 
-static rtos_tcb_t  *g_ready[RTOS_MAX_PRIORITIES];   // per-priority ready queues
-static uint32_t     g_ready_bitmap;                 // bit N set ↔ g_ready[N] non-empty
-static rtos_tcb_t  *g_blocked;                      // delay-sorted blocked list
-rtos_tcb_t         *g_current;                      // currently running task (non-static for port asm)
-static uint32_t     g_tick_count;                   // incremented by SysTick handler, returned by xTaskGetTickCount()
+#define STACK_SENTINEL_WORD   0xDEADBEEFu
+#define STACK_SENTINEL_COUNT  4               // words filled at bottom of stack
+#define STACK_WATERMARK_WORD  0xA5A5A5A5u
 
-// Idle task — runs when no other task is ready.
+//[]---------------------------------------------------------------------------[]
+// Scheduler state — per-core when RTOS_NUM_CORES > 1
+//[]---------------------------------------------------------------------------[]
+
+#if RTOS_NUM_CORES > 1
+
+static rtos_tcb_t  *g_ready[RTOS_NUM_CORES][RTOS_MAX_PRIORITIES];
+static uint32_t     g_ready_bitmap[RTOS_NUM_CORES];
+static rtos_tcb_t  *g_blocked[RTOS_NUM_CORES];
+rtos_tcb_t         *g_current[RTOS_NUM_CORES];
+static uint32_t     g_tick_count[RTOS_NUM_CORES];
+
+static rtos_tcb_t   g_idle_tcb[RTOS_NUM_CORES];
+static uint8_t      g_idle_stack[RTOS_NUM_CORES][RTOS_IDLE_STACK_WORDS * RTOS_STACK_BYTES_PER_WORD];
+
+// Convenience macros — index by current core
+#define CORE            port_core_id()
+#define G_READY         g_ready[CORE]
+#define G_READY_BITMAP  g_ready_bitmap[CORE]
+#define G_BLOCKED       g_blocked[CORE]
+#define G_CURRENT       g_current[CORE]
+#define G_TICK_COUNT    g_tick_count[CORE]
+
+#else  // single-core
+
+static rtos_tcb_t  *g_ready[RTOS_MAX_PRIORITIES];
+static uint32_t     g_ready_bitmap;
+static rtos_tcb_t  *g_blocked;
+rtos_tcb_t         *g_current;
+static uint32_t     g_tick_count;
+
 static rtos_tcb_t   g_idle_tcb;
 static uint8_t      g_idle_stack[RTOS_IDLE_STACK_WORDS * RTOS_STACK_BYTES_PER_WORD];
 
-//---------------------------------------------------------------------------
-// Idle task implementation
-//---------------------------------------------------------------------------
-static void idle_task(void *arg)
+#define G_READY         g_ready
+#define G_READY_BITMAP  g_ready_bitmap
+#define G_BLOCKED       g_blocked
+#define G_CURRENT       g_current
+#define G_TICK_COUNT    g_tick_count
+
+#endif  // RTOS_NUM_CORES
+
+// ---------------------------------------------------------------------------
+// All-tasks list for debug inspection and runtime stats
+// ---------------------------------------------------------------------------
+
+#if RTOS_ENABLE_RUNTIME_STATS || RTOS_STACK_OVERFLOW_CHECK
+static rtos_tcb_t *g_all_tasks[RTOS_MAX_TASKS];
+static size_t      g_all_tasks_count = 0;
+
+static void all_tasks_add(rtos_tcb_t *tcb)
 {
-    (void)arg;
-    for (;;)
-        port_request_reschedule();  // WFI on real hardware; advances clock on host
+    if (g_all_tasks_count < RTOS_MAX_TASKS)
+        g_all_tasks[g_all_tasks_count++] = tcb;
 }
+
+static void all_tasks_remove(rtos_tcb_t *tcb)
+{
+    for (size_t i = 0; i < g_all_tasks_count; i++) {
+        if (g_all_tasks[i] == tcb) {
+            g_all_tasks[i] = g_all_tasks[--g_all_tasks_count];
+            return;
+        }
+    }
+}
+#endif
+
+// ---------------------------------------------------------------------------
+// Weak default stub for port functions added in this release.
+// Ports that don't yet implement them will link against these.
+// ---------------------------------------------------------------------------
+
+__attribute__((weak)) void     port_cpu_idle(void)                 { }
+__attribute__((weak)) uint32_t port_suppress_ticks(uint32_t n)     { (void)n; return 0; }
+__attribute__((weak)) uint8_t  port_core_id(void)                  { return 0; }
+
+// ---------------------------------------------------------------------------
+// Weak overflow hook — spin by default; user may override to log / halt.
+// ---------------------------------------------------------------------------
+
+__attribute__((weak))
+void rtos_stack_overflow_hook(rtos_tcb_t *tcb)
+{
+    (void)tcb;
+    for (;;) ;
+}
+
+// ---------------------------------------------------------------------------
+// Trace weak stubs — do nothing; user overrides the ones they want.
+// ---------------------------------------------------------------------------
+
+#if RTOS_ENABLE_TRACE
+__attribute__((weak)) void rtos_trace_task_switched_in(rtos_tcb_t *t)  { (void)t; }
+__attribute__((weak)) void rtos_trace_task_switched_out(rtos_tcb_t *t) { (void)t; }
+__attribute__((weak)) void rtos_trace_task_create(rtos_tcb_t *t)       { (void)t; }
+__attribute__((weak)) void rtos_trace_task_delete(rtos_tcb_t *t)       { (void)t; }
+#endif
 
 //[]---------------------------------------------------------------------------[]
 // Internal helpers
@@ -45,8 +128,8 @@ static void idle_task(void *arg)
 static void ready_add(rtos_tcb_t *tcb)
 {
     tcb->state = TASK_READY;
-    list_insert_tail(&g_ready[tcb->priority], tcb);
-    g_ready_bitmap |= (1u << tcb->priority);
+    list_insert_tail(&G_READY[tcb->priority], tcb);
+    G_READY_BITMAP |= (1u << tcb->priority);
 }
 
 //---------------------------------------------------------------------------
@@ -62,10 +145,10 @@ void rtos_task_make_ready(rtos_tcb_t *tcb)
 //---------------------------------------------------------------------------
 static void ready_remove(rtos_tcb_t *tcb)
 {
-    list_remove(&g_ready[tcb->priority], tcb);
+    list_remove(&G_READY[tcb->priority], tcb);
 
-    if (!g_ready[tcb->priority])
-        g_ready_bitmap &= ~(1u << tcb->priority);
+    if (!G_READY[tcb->priority])
+        G_READY_BITMAP &= ~(1u << tcb->priority);
 }
 
 //---------------------------------------------------------------------------
@@ -74,12 +157,16 @@ static void ready_remove(rtos_tcb_t *tcb)
 //---------------------------------------------------------------------------
 static rtos_tcb_t *scheduler_pick_next(void)
 {
-    if (!g_ready_bitmap) return &g_idle_tcb;
+#if RTOS_NUM_CORES > 1
+    if (!G_READY_BITMAP) return &g_idle_tcb[CORE];
+#else
+    if (!G_READY_BITMAP) return &g_idle_tcb;
+#endif
 
     // __builtin_ctz gives index of lowest set bit = highest priority
-    uint8_t prio = (uint8_t)__builtin_ctz(g_ready_bitmap);
+    uint8_t prio = (uint8_t)__builtin_ctz(G_READY_BITMAP);
 
-    return g_ready[prio];
+    return G_READY[prio];
 }
 
 //[]---------------------------------------------------------------------------[]
@@ -88,8 +175,8 @@ static rtos_tcb_t *scheduler_pick_next(void)
 
 //---------------------------------------------------------------------------
 // Create a new task. Returns a handle to the task, or NULL on failure.
-// Caller must provide a TCB and stack buffer, which can be on the caller's 
-// stack or in static memory. The task will be added to the ready list and 
+// Caller must provide a TCB and stack buffer, which can be on the caller's
+// stack or in static memory. The task will be added to the ready list and
 // may run immediately if it has higher priority than the current task.
 //---------------------------------------------------------------------------
 rtos_handle_t rtos_task_create(rtos_tcb_t *tcb,
@@ -119,14 +206,44 @@ rtos_handle_t rtos_task_create(rtos_tcb_t *tcb,
     tcb->stack_words = stack_words;
     tcb->next        = NULL;
 
+#if RTOS_ENABLE_RUNTIME_STATS
+    tcb->runtime_ticks = 0;
+#endif
+
+    // Fill stack with watermark pattern before writing the sentinel, so the
+    // sentinel at the bottom is distinct from the watermark region above it.
+#if RTOS_STACK_WATERMARK
+    {
+        uint32_t *p   = (uint32_t *)stack;
+        size_t    n   = stack_words * RTOS_STACK_BYTES_PER_WORD / sizeof(uint32_t);
+        for (size_t i = 0; i < n; i++)
+            p[i] = STACK_WATERMARK_WORD;
+    }
+#endif
+
+    // Write sentinel words at the very bottom of the stack (lowest addresses).
+#if RTOS_STACK_OVERFLOW_CHECK
+    {
+        uint32_t *p = (uint32_t *)stack;
+        for (int i = 0; i < STACK_SENTINEL_COUNT; i++)
+            p[i] = STACK_SENTINEL_WORD;
+    }
+#endif
+
     // Build initial stack frame (port-specific).
     // stack_top = one byte past the end of the stack buffer.
     tcb->sp = port_init_stack((uint8_t *)stack + stack_words * RTOS_STACK_BYTES_PER_WORD,
                                func, arg);
 
+#if RTOS_ENABLE_RUNTIME_STATS || RTOS_STACK_OVERFLOW_CHECK
+    all_tasks_add(tcb);
+#endif
+
     port_enter_critical();
     ready_add(tcb);
     port_exit_critical();
+
+    RTOS_TRACE_TASK_CREATE(tcb);
 
     return (rtos_handle_t)tcb;
 }
@@ -142,10 +259,10 @@ void rtos_task_delay(uint32_t ticks)
     }
 
     port_enter_critical();
-    ready_remove(g_current);
-    g_current->state       = TASK_BLOCKED;
-    g_current->delay_ticks = ticks;
-    list_insert_sorted(&g_blocked, g_current, ticks);
+    ready_remove(G_CURRENT);
+    G_CURRENT->state       = TASK_BLOCKED;
+    G_CURRENT->delay_ticks = ticks;
+    list_insert_sorted(&G_BLOCKED, G_CURRENT, ticks);
     port_exit_critical();
 
     port_request_reschedule();
@@ -166,7 +283,7 @@ void rtos_task_yield(void)
 //---------------------------------------------------------------------------
 void rtos_task_suspend(rtos_handle_t task)
 {
-    rtos_tcb_t *tcb = task ? (rtos_tcb_t *)task : g_current;
+    rtos_tcb_t *tcb = task ? (rtos_tcb_t *)task : G_CURRENT;
 
     port_enter_critical();
 
@@ -175,13 +292,13 @@ void rtos_task_suspend(rtos_handle_t task)
         ready_remove(tcb);
     } else if (tcb->state == TASK_BLOCKED) 
     {
-        list_remove(&g_blocked, tcb);
+        list_remove(&G_BLOCKED, tcb);
     }
 
     tcb->state = TASK_SUSPENDED;
     port_exit_critical();
 
-    if (tcb == g_current)
+    if (tcb == G_CURRENT)
         port_request_reschedule();
 }
 
@@ -211,7 +328,7 @@ void rtos_task_resume(rtos_handle_t task)
 //---------------------------------------------------------------------------
 void rtos_task_delete(rtos_handle_t task)
 {
-    rtos_tcb_t *tcb = task ? (rtos_tcb_t *)task : g_current;
+    rtos_tcb_t *tcb = task ? (rtos_tcb_t *)task : G_CURRENT;
 
     port_enter_critical();
 
@@ -220,13 +337,19 @@ void rtos_task_delete(rtos_handle_t task)
         ready_remove(tcb);
     } else if (tcb->state == TASK_BLOCKED) 
     {
-        list_remove(&g_blocked, tcb);
+        list_remove(&G_BLOCKED, tcb);
     }
 
     tcb->state = TASK_DELETED;
     port_exit_critical();
 
-    if (tcb == g_current)
+    RTOS_TRACE_TASK_DELETE(tcb);
+
+#if RTOS_ENABLE_RUNTIME_STATS || RTOS_STACK_OVERFLOW_CHECK
+    all_tasks_remove(tcb);
+#endif
+
+    if (tcb == G_CURRENT)
         port_request_reschedule();
 }
 
@@ -236,7 +359,136 @@ void rtos_task_delete(rtos_handle_t task)
 //---------------------------------------------------------------------------
 uint32_t rtos_task_tick_count(void)
 {
-    return g_tick_count;
+    return G_TICK_COUNT;
+}
+
+//---------------------------------------------------------------------------
+// Debug: check whether a task's stack sentinel is still intact.
+//---------------------------------------------------------------------------
+int rtos_task_check_stack(rtos_handle_t task)
+{
+#if RTOS_STACK_OVERFLOW_CHECK
+    rtos_tcb_t *tcb = (rtos_tcb_t *)task;
+    if (!tcb) return RTOS_ERR;
+    uint32_t *p = (uint32_t *)tcb->stack_base;
+    return (p[0] == STACK_SENTINEL_WORD) ? RTOS_OK : RTOS_ERR;
+#else
+    (void)task;
+    return RTOS_OK;
+#endif
+}
+
+//---------------------------------------------------------------------------
+// Debug: return the number of stack words never written (high-water mark).
+//---------------------------------------------------------------------------
+uint32_t rtos_task_stack_high_water_mark(rtos_handle_t task)
+{
+#if RTOS_STACK_WATERMARK
+    rtos_tcb_t *tcb = (rtos_tcb_t *)task;
+    if (!tcb) return 0;
+    uint32_t *p      = (uint32_t *)tcb->stack_base;
+    size_t    words  = tcb->stack_words * RTOS_STACK_BYTES_PER_WORD / sizeof(uint32_t);
+    uint32_t  untouched = 0;
+    // Walk from bottom up; skip sentinel region
+    for (size_t i = STACK_SENTINEL_COUNT; i < words; i++) {
+        if (p[i] == STACK_WATERMARK_WORD)
+            untouched++;
+        else
+            break;
+    }
+    return untouched;
+#else
+    (void)task;
+    return 0;
+#endif
+}
+
+//---------------------------------------------------------------------------
+// Runtime CPU stats
+//---------------------------------------------------------------------------
+#if RTOS_ENABLE_RUNTIME_STATS
+size_t rtos_task_get_runtime_stats(rtos_runtime_stat_t *buf, size_t n)
+{
+    if (!buf || n == 0) return 0;
+
+    // Compute total ticks across all live tasks
+    uint32_t total = 0;
+    for (size_t i = 0; i < g_all_tasks_count; i++)
+        total += g_all_tasks[i]->runtime_ticks;
+
+    size_t written = 0;
+    for (size_t i = 0; i < g_all_tasks_count && written < n; i++, written++) {
+        buf[written].name          = g_all_tasks[i]->name;
+        buf[written].runtime_ticks = g_all_tasks[i]->runtime_ticks;
+        buf[written].percent       = total ? (uint8_t)((uint64_t)g_all_tasks[i]->runtime_ticks * 100 / total) : 0;
+    }
+    return written;
+}
+#endif
+
+//---------------------------------------------------------------------------
+// Idle task implementation
+//---------------------------------------------------------------------------
+#if RTOS_STACK_OVERFLOW_CHECK
+static void idle_check_all_stacks(void)
+{
+    for (size_t i = 0; i < g_all_tasks_count; i++) {
+        uint32_t *p = (uint32_t *)g_all_tasks[i]->stack_base;
+        if (p[0] != STACK_SENTINEL_WORD)
+            rtos_stack_overflow_hook(g_all_tasks[i]);
+    }
+}
+#endif
+
+static void idle_task(void *arg)
+{
+    (void)arg;
+    for (;;) {
+#if RTOS_STACK_OVERFLOW_CHECK
+        idle_check_all_stacks();
+#endif
+
+#ifdef RTOS_IDLE_HOOK_FUNCTION
+        RTOS_IDLE_HOOK_FUNCTION();
+#endif
+
+#if RTOS_TICKLESS_IDLE
+        {
+            uint32_t max = rtos_idle_next_wakeup_ticks();
+            if (max > 1) {
+                uint32_t elapsed = port_suppress_ticks(max);
+                if (elapsed > 0)
+                    rtos_tick_advance(elapsed);
+            }
+        }
+#endif
+        port_cpu_idle();
+        port_request_reschedule();
+    }
+}
+
+//---------------------------------------------------------------------------
+// Tickless: walk blocked list, return ticks until the soonest wakeup.
+//---------------------------------------------------------------------------
+uint32_t rtos_idle_next_wakeup_ticks(void)
+{
+    uint32_t min = RTOS_WAIT_FOREVER;
+    rtos_tcb_t *tcb = G_BLOCKED;
+    while (tcb) {
+        if (tcb->delay_ticks < min)
+            min = tcb->delay_ticks;
+        tcb = tcb->next;
+    }
+    return min;
+}
+
+//---------------------------------------------------------------------------
+// Bulk-advance the tick count (used by tickless idle after port_suppress_ticks).
+//---------------------------------------------------------------------------
+void rtos_tick_advance(uint32_t n)
+{
+    for (uint32_t i = 0; i < n; i++)
+        rtos_tick_handler();
 }
 
 //---------------------------------------------------------------------------
@@ -244,10 +496,15 @@ uint32_t rtos_task_tick_count(void)
 //---------------------------------------------------------------------------
 void rtos_tick_handler(void)
 {
-    g_tick_count++;
+    G_TICK_COUNT++;
+
+#if RTOS_ENABLE_RUNTIME_STATS
+    if (G_CURRENT)
+        G_CURRENT->runtime_ticks++;
+#endif
 
     // Decrement delay counts; unblock tasks whose delay has expired
-    rtos_tcb_t *tcb = g_blocked;
+    rtos_tcb_t *tcb = G_BLOCKED;
 
     while (tcb) 
     {
@@ -257,12 +514,21 @@ void rtos_tick_handler(void)
 
         if (tcb->delay_ticks == 0) 
         {
-            list_remove(&g_blocked, tcb);
+            list_remove(&G_BLOCKED, tcb);
             ready_add(tcb);
         }
 
         tcb = next;
     }
+
+    // Per-tick stack overflow check (lightweight: only tests first sentinel word)
+#if RTOS_STACK_OVERFLOW_CHECK
+    if (G_CURRENT) {
+        uint32_t *p = (uint32_t *)G_CURRENT->stack_base;
+        if (p && p[0] != STACK_SENTINEL_WORD)
+            rtos_stack_overflow_hook(G_CURRENT);
+    }
+#endif
 
     // Fire software timers
     extern void rtos_timer_tick(void);
@@ -276,37 +542,50 @@ void rtos_tick_handler(void)
 // ---------------------------------------------------------------------------
 
 // Exposed so the port's context switcher can read/write the current TCB pointer.
+#if RTOS_NUM_CORES > 1
+rtos_tcb_t **rtos_current_tcb_ptr(void) { return &g_current[port_core_id()]; }
+rtos_tcb_t  *rtos_next_task(void)       { return scheduler_pick_next(); }
+#else
 rtos_tcb_t **rtos_current_tcb_ptr(void) { return &g_current; }
 rtos_tcb_t  *rtos_next_task(void)       { return scheduler_pick_next(); }
+#endif
 
 // Perform a context switch: if the current task was preempted (still RUNNING),
 // put it back on the ready list, then pick the highest-priority ready task and
 // make it the new current task.  Called from PendSV (ARM) or the timer ISR (AVR).
 void rtos_context_switch(void)
 {
-    if (g_current && g_current->state == TASK_RUNNING)
-        ready_add(g_current);
+    if (G_CURRENT && G_CURRENT->state == TASK_RUNNING) {
+        RTOS_TRACE_TASK_SWITCHED_OUT(G_CURRENT);
+        ready_add(G_CURRENT);
+    }
 
     rtos_tcb_t *next = scheduler_pick_next();
-    g_current = next;
-    g_current->state = TASK_RUNNING;
-    ready_remove(g_current);
+    G_CURRENT = next;
+    G_CURRENT->state = TASK_RUNNING;
+    ready_remove(G_CURRENT);
+
+    RTOS_TRACE_TASK_SWITCHED_IN(G_CURRENT);
 }
 
 //---------------------------------------------------------------------------
-// Initialise the idle task and start the scheduler. Called by vRTOSStart() after port_init().
+// Initialise the idle task and start the scheduler. Called by rtos_start().
 //---------------------------------------------------------------------------
 static void rtos_scheduler_start(void)
 {
-    // Create the idle task at the lowest priority
+#if RTOS_NUM_CORES > 1
+    uint8_t core = port_core_id();
+    rtos_task_create(&g_idle_tcb[core], g_idle_stack[core], RTOS_IDLE_STACK_WORDS,
+                     idle_task, NULL, "idle", RTOS_MAX_PRIORITIES - 1);
+    G_CURRENT = scheduler_pick_next();
+#else
     rtos_task_create(&g_idle_tcb, g_idle_stack, RTOS_IDLE_STACK_WORDS, idle_task, NULL,
                 "idle", RTOS_MAX_PRIORITIES - 1);
-
-    // Pick the first task and hand control to the port
     g_current = scheduler_pick_next();
-    g_current->state = TASK_RUNNING;
+#endif
 
-    ready_remove(g_current);
+    G_CURRENT->state = TASK_RUNNING;
+    ready_remove(G_CURRENT);
 }
 
 //---------------------------------------------------------------------------

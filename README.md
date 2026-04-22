@@ -24,7 +24,8 @@ rtos/
 │   ├── rtos_sem.h
 │   ├── rtos_mutex.h
 │   ├── rtos_queue.h
-│   └── rtos_timer.h
+│   ├── rtos_timer.h
+│   └── rtos_trace.h  # Optional trace hook macros
 ├── src/              # Architecture-independent kernel
 │   ├── task.c        # Scheduler + task management
 │   ├── sem.c
@@ -70,6 +71,28 @@ Edit `include/rtos_config.h` (or define before including `rtos.h`):
 | `RTOS_MTIME_HZ` | `10000000` | MTIME counter frequency in Hz (RISC-V only) |
 | `RTOS_ESP32S3_CPU_HZ` | `240000000` | CPU frequency in Hz (ESP32-S3 only) |
 | `RTOS_TIMG0_BASE_ADDR` | `0x6001F000` | Timer Group 0 base address (ESP32-S3 only) |
+
+### Debug and instrumentation knobs
+
+| Macro | Default | Meaning |
+|---|---|---|
+| `RTOS_STACK_OVERFLOW_CHECK` | 1 | Sentinel fill + per-tick check for running task + full check in idle |
+| `RTOS_STACK_WATERMARK` | 0 | Fill entire stack on create; `rtos_task_stack_high_water_mark()` counts untouched words |
+| `RTOS_ENABLE_TRACE` | 0 | Enable `RTOS_TRACE_*` hook macros (see `include/rtos_trace.h`) |
+| `RTOS_ENABLE_RUNTIME_STATS` | 0 | Per-task tick counter + `rtos_task_get_runtime_stats()` |
+
+### Power / tickless knobs
+
+| Macro | Default | Meaning |
+|---|---|---|
+| `RTOS_TICKLESS_IDLE` | 0 | Skip ticks while all tasks are blocked; requires `port_suppress_ticks()` |
+| `RTOS_IDLE_HOOK_FUNCTION` | (none) | `void fn(void)` called from idle on every idle loop iteration |
+
+### Multi-core knobs
+
+| Macro | Default | Meaning |
+|---|---|---|
+| `RTOS_NUM_CORES` | 1 | `1` = single-core; `2` = AMP dual-core (RP2040 / ESP32-S3) |
 
 ---
 
@@ -199,6 +222,10 @@ void rtos_task_yield(void);
 void rtos_task_suspend(rtos_handle_t);
 void rtos_task_resume(rtos_handle_t);
 void rtos_task_delete(rtos_handle_t);   // pass NULL for current task
+
+// Debug (compile with RTOS_STACK_OVERFLOW_CHECK / RTOS_STACK_WATERMARK)
+int      rtos_task_check_stack(rtos_handle_t);             // RTOS_OK or RTOS_ERR
+uint32_t rtos_task_stack_high_water_mark(rtos_handle_t);   // words never written
 ```
 
 ### Semaphores
@@ -243,6 +270,188 @@ rtos_timer_start(t);
 rtos_timer_stop(t);
 rtos_timer_reset(t);
 ```
+
+---
+
+## Debug and instrumentation
+
+### Stack overflow detection
+
+Stack overflow detection is **on by default** (`RTOS_STACK_OVERFLOW_CHECK=1`). It writes four
+`0xDEADBEEF` sentinel words at the bottom of every task stack at creation time, and checks
+them every tick for the currently-running task (fast) plus on every idle-task iteration for
+all tasks (thorough).
+
+When corruption is detected the weak `rtos_stack_overflow_hook` is called (spins by default);
+override it in your application to log the task name and halt:
+
+```c
+void rtos_stack_overflow_hook(rtos_tcb_t *tcb)
+{
+    printf("STACK OVERFLOW: %s\n", tcb->name);
+    for (;;);
+}
+```
+
+**Stack high-water mark** (`RTOS_STACK_WATERMARK=1`): fills the entire stack with `0xA5A5A5A5`
+at creation, then lets you query how close to full a task's stack has grown:
+
+```c
+uint32_t free_words = rtos_task_stack_high_water_mark(task_handle);
+```
+
+### Trace hooks
+
+Compile with `RTOS_ENABLE_TRACE=1` to activate the trace macros in `include/rtos_trace.h`.
+All hooks are zero-cost when disabled (expand to `((void)0)`).
+
+Implement any of the `rtos_trace_*` weak functions to receive events:
+
+```c
+void rtos_trace_task_switched_in(rtos_tcb_t *tcb)
+{
+    // e.g. write a timestamp + task name to a ring buffer
+    // or call SEGGER_SYSVIEW_OnTaskStartExec(...)
+}
+```
+
+Available hooks: `task_switched_in/out`, `task_create/delete`, `sem_take/give`,
+`mutex_lock/unlock`, `queue_send/receive`, `timer_fire`.
+
+### Runtime CPU statistics
+
+Compile with `RTOS_ENABLE_RUNTIME_STATS=1` to track per-task CPU tick usage:
+
+```c
+rtos_runtime_stat_t stats[RTOS_MAX_TASKS];
+size_t n = rtos_task_get_runtime_stats(stats, RTOS_MAX_TASKS);
+for (size_t i = 0; i < n; i++)
+    printf("%-16s  %6lu ticks  %3u%%\n",
+           stats[i].name, (unsigned long)stats[i].runtime_ticks, stats[i].percent);
+```
+
+---
+
+## Low-power / tickless idle
+
+By default the idle task calls `port_cpu_idle()` (WFI on ARM/RISC-V, WAITI on Xtensa)
+which sleeps until the next tick interrupt.  This saves power with no configuration required.
+
+### Optional idle hook
+
+Define `RTOS_IDLE_HOOK_FUNCTION` in `rtos_config.h` to call your own code from the idle
+task on every idle iteration (e.g. to feed a watchdog, blink an LED, or gather diagnostics):
+
+```c
+#define RTOS_IDLE_HOOK_FUNCTION  my_idle_hook
+void my_idle_hook(void) { /* feed watchdog, etc. */ }
+```
+
+### Tickless idle
+
+Set `RTOS_TICKLESS_IDLE=1` to suppress tick interrupts entirely when all tasks are
+blocked on delays.  The scheduler calculates the soonest wakeup, reprograms the tick
+timer for that duration, executes WFI, then credits the elapsed ticks on wake-up.
+This can dramatically reduce idle current on battery-powered devices.
+
+On the **RP2040** (`port/arm_cm0plus/`), `port_suppress_ticks()` reprograms SysTick
+for up to 24-bit counts worth of ticks, issues WFI, measures elapsed cycles, then
+restores the normal period.
+
+The host simulation port (`port/host/`) implements tickless via `usleep()` and is
+useful for verifying tickless logic in tests.
+
+---
+
+## AMP multi-core (RP2040 / ESP32-S3)
+
+Set `RTOS_NUM_CORES=2` for **Asymmetric Multi-Processing (AMP)**: each CPU core runs
+an independent scheduler instance with its own ready/blocked lists, idle task, and
+tick counter.  Cores communicate via shared queues protected by cross-core critical
+sections.
+
+### How it works
+
+- All scheduler globals become `[RTOS_NUM_CORES]` arrays indexed by `port_core_id()`.
+- **Critical sections** (`RTOS_NUM_CORES > 1`): first disable IRQs (`cpsid i`), then
+  claim **SIO spinlock 0** (RP2040) so the other core cannot enter simultaneously.
+  Release order is reversed: drop spinlock, re-enable IRQs.
+- Tasks are created on the core that calls `rtos_task_create()` — there is no migration.
+  Use `rtos_queue_send` / `rtos_queue_receive` across cores for all inter-core data.
+
+### RP2040 startup pattern
+
+Core 1 is started via the SIO FIFO (see RP2040 datasheet §2.8.2).  Call `rtos_start()`
+independently on each core:
+
+```c
+#include "rtos.h"
+#include "pico/multicore.h"   // Raspberry Pi Pico SDK
+
+static rtos_tcb_t   c1_task_tcb;
+static uint32_t     c1_task_stack[256];
+static rtos_queue_t shared_queue;
+static uint8_t      shared_buf[4 * sizeof(uint32_t)];
+
+// Shared queue — initialized by core 0 before launching core 1
+rtos_handle_t g_queue;
+
+static void core1_task(void *arg)
+{
+    (void)arg;
+    for (;;) {
+        uint32_t val;
+        if (rtos_queue_receive(g_queue, &val, RTOS_WAIT_FOREVER) == RTOS_OK)
+            printf("core1 got %lu\n", (unsigned long)val);
+    }
+}
+
+static void core1_entry(void)
+{
+    rtos_task_create(&c1_task_tcb, c1_task_stack, 256,
+                     core1_task, NULL, "c1task", 1);
+    rtos_start();   // core 1 never returns here
+}
+
+// Core 0 task — sends to the shared queue
+static rtos_tcb_t   c0_task_tcb;
+static uint32_t     c0_task_stack[256];
+
+static void core0_task(void *arg)
+{
+    (void)arg;
+    uint32_t n = 0;
+    for (;;) {
+        rtos_queue_send(g_queue, &n, RTOS_WAIT_FOREVER);
+        n++;
+        rtos_task_delay(1000);
+    }
+}
+
+int main(void)
+{
+    // Initialize shared queue before starting core 1
+    g_queue = rtos_queue_create(&shared_queue, shared_buf, sizeof(uint32_t), 4);
+
+    // Launch core 1
+    multicore_launch_core1(core1_entry);
+
+    // Core 0 tasks
+    rtos_task_create(&c0_task_tcb, c0_task_stack, 256,
+                     core0_task, NULL, "c0task", 1);
+    rtos_start();   // core 0 never returns
+}
+```
+
+### AMP guidelines
+
+- **Shared objects** (queues, semaphores, mutexes) must reside in shared RAM (default
+  on RP2040 — all RAM is shared; on ESP32-S3 avoid DRAM0/1 if they differ per core).
+- **Do not share TCBs or stacks** between cores.  Each core owns its tasks entirely.
+- **No priority inheritance across cores** — a high-priority task on core 1 does not
+  preempt a lower-priority task on core 0.
+- **Tick counts are independent** per core; do not use `rtos_task_tick_count()` for
+  cross-core time synchronisation.
 
 ---
 
@@ -299,10 +508,13 @@ cmake -B build && cmake --build build
 
 
 
+## Porting to a new architecture
+
 1. Copy `port/arm_cm0plus/` (or `port/riscv/`) to `port/<your-arch>/`
-2. Implement `port.c`: `port_init`, `port_enter_critical`, `port_exit_critical`, `port_request_reschedule`, `port_start_first_task`, `port_init_stack`
+2. Implement `port.c`: `port_init`, `port_enter_critical`, `port_exit_critical`, `port_request_reschedule`, `port_start_first_task`, `port_init_stack`, `port_cpu_idle`, `port_core_id`
 3. Implement `port_asm.S` (or use inline asm in `port.c`): the context-switch handler
-4. Add a CMake toolchain file in `cmake/` and update `CMakeLists.txt` to select the port sources
+4. Optionally implement `port_suppress_ticks(max_ticks)` for tickless idle support
+5. Add a CMake toolchain file in `cmake/` and update `CMakeLists.txt` to select the port sources
 
 ---
 

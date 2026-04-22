@@ -5,6 +5,7 @@
 //---------------------------------------------------------------------------
 #include <stdint.h>
 #include "../include/rtos_timer.h"
+#include "../include/rtos_trace.h"
 #include "port.h"
 
 static rtos_timer_t *g_timer_list = NULL;  // singly-linked active timer list
@@ -123,6 +124,7 @@ void rtos_timer_tick(void)
 
         if (cur->remaining_ticks == 0) 
         {
+            RTOS_TRACE_TIMER_FIRE(cur);
             cur->cb((rtos_handle_t)cur);
 
             if (cur->periodic) {

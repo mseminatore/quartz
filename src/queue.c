@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "../include/rtos_queue.h"
+#include "../include/rtos_trace.h"
 #include "list.h"
 #include "port.h"
 
@@ -65,6 +66,7 @@ int rtos_queue_send(rtos_handle_t handle, const void *item, uint32_t timeout_tic
 
         port_exit_critical();
         port_request_reschedule();
+        RTOS_TRACE_QUEUE_SEND(q);
         return RTOS_OK;
     }
 
@@ -115,6 +117,7 @@ int rtos_queue_receive(rtos_handle_t handle, void *item, uint32_t timeout_ticks)
 
         port_exit_critical();
         port_request_reschedule();
+        RTOS_TRACE_QUEUE_RECEIVE(q);
         return RTOS_OK;
     }
 

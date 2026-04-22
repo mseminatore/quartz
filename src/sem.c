@@ -5,6 +5,7 @@
 //---------------------------------------------------------------------------
 #include <stdint.h>
 #include "../include/rtos_sem.h"
+#include "../include/rtos_trace.h"
 #include "list.h"
 #include "port.h"
 
@@ -67,6 +68,7 @@ int rtos_semaphore_take(rtos_handle_t handle, uint32_t timeout_ticks)
     if (sem->count > 0) {
         sem->count--;
         port_exit_critical();
+        RTOS_TRACE_SEM_TAKE(sem);
         return RTOS_OK;
     }
 
@@ -92,7 +94,7 @@ int rtos_semaphore_take(rtos_handle_t handle, uint32_t timeout_ticks)
     int on_list = list_remove(&sem->wait_list, self);
     port_exit_critical();
 
-    return on_list ? RTOS_TIMEOUT : RTOS_OK;
+    return on_list ? RTOS_TIMEOUT : (RTOS_TRACE_SEM_TAKE(sem), RTOS_OK);
 }
 
 //---------------------------------------------------------------------------
@@ -120,6 +122,7 @@ void rtos_semaphore_give(rtos_handle_t handle)
     }
 
     port_exit_critical();
+    RTOS_TRACE_SEM_GIVE(sem);
     port_request_reschedule();
 }
 

@@ -126,3 +126,23 @@ void *port_init_stack(void     *stack_top,
 
 // port_start_first_task is implemented in port_asm.S.
 
+// ---------------------------------------------------------------------------
+// port_cpu_idle — WFI on RISC-V; waits for the next machine interrupt.
+// ---------------------------------------------------------------------------
+
+void port_cpu_idle(void)
+{
+    __asm__ volatile("wfi");
+}
+
+// ---------------------------------------------------------------------------
+// port_core_id — returns the hart ID from the mhartid CSR.
+// On single-hart targets this is always 0.
+// ---------------------------------------------------------------------------
+
+uint8_t port_core_id(void)
+{
+    uint32_t id;
+    __asm__ volatile("csrr %0, mhartid" : "=r"(id));
+    return (uint8_t)id;
+}

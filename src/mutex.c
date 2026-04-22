@@ -5,6 +5,7 @@
 //---------------------------------------------------------------------------
 #include <stdint.h>
 #include "../include/rtos_mutex.h"
+#include "../include/rtos_trace.h"
 #include "list.h"
 #include "port.h"
 
@@ -46,6 +47,7 @@ int rtos_mutex_lock(rtos_handle_t handle, uint32_t timeout_ticks)
     {
         mutex->owner = current_task();
         port_exit_critical();
+        RTOS_TRACE_MUTEX_LOCK(mutex);
         return RTOS_OK;
     }
 
@@ -69,7 +71,7 @@ int rtos_mutex_lock(rtos_handle_t handle, uint32_t timeout_ticks)
     int on_list = list_remove(&mutex->wait_list, self);
     port_exit_critical();
 
-    return on_list ? RTOS_TIMEOUT : RTOS_OK;
+    return on_list ? RTOS_TIMEOUT : (RTOS_TRACE_MUTEX_LOCK(mutex), RTOS_OK);
 }
 
 //---------------------------------------------------------------------------
@@ -96,5 +98,6 @@ void rtos_mutex_unlock(rtos_handle_t handle)
     }
 
     port_exit_critical();
+    RTOS_TRACE_MUTEX_UNLOCK(mutex);
     port_request_reschedule();
 }
