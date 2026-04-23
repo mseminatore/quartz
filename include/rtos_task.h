@@ -42,10 +42,14 @@ typedef struct rtos_tcb {
 #if RTOS_ENABLE_RUNTIME_STATS
     uint32_t            runtime_ticks;           // total ticks this task has been running
 #endif
+#if RTOS_NUM_CORES > 1
+    uint8_t             core;                    // CPU core this task is pinned to
+#endif
 } rtos_tcb_t;
 
-// Create a task. tcb and stack must be static storage provided by the caller.
-// stack_words is the number of RTOS_STACK_BYTES_PER_WORD units in the stack buffer.
+// Create a task on the calling core. tcb and stack must be static storage
+// provided by the caller. stack_words is the number of RTOS_STACK_BYTES_PER_WORD
+// units in the stack buffer.
 rtos_handle_t rtos_task_create(rtos_tcb_t *tcb,
                                 void       *stack,
                                 size_t      stack_words,
@@ -53,6 +57,22 @@ rtos_handle_t rtos_task_create(rtos_tcb_t *tcb,
                                 void       *arg,
                                 const char *name,
                                 uint8_t     priority);
+
+// Create a task pinned to a specific CPU core. Only available when RTOS_NUM_CORES > 1.
+#if RTOS_NUM_CORES > 1
+rtos_handle_t rtos_task_create_on_core(rtos_tcb_t *tcb,
+                                        void       *stack,
+                                        size_t      stack_words,
+                                        void      (*func)(void *),
+                                        void       *arg,
+                                        const char *name,
+                                        uint8_t     priority,
+                                        uint8_t     core);
+
+// Entry point for core 1. Pass to multicore_launch_core1() before calling
+// rtos_start() on core 0. Initialises core 1's SysTick and starts its scheduler.
+void rtos_core1_entry(void);
+#endif
 
 // Delay the calling task for the given number of ticks.
 void rtos_task_delay(uint32_t ticks);

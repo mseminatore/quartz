@@ -128,8 +128,14 @@ __attribute__((weak)) void rtos_trace_task_delete(rtos_tcb_t *t)       { (void)t
 static void ready_add(rtos_tcb_t *tcb)
 {
     tcb->state = TASK_READY;
-    list_insert_tail(&G_READY[tcb->priority], tcb);
-    G_READY_BITMAP |= (1u << tcb->priority);
+#if RTOS_NUM_CORES > 1
+    uint8_t c = tcb->core;
+    list_insert_tail(&g_ready[c][tcb->priority], tcb);
+    g_ready_bitmap[c] |= (1u << tcb->priority);
+#else
+    list_insert_tail(&g_ready[tcb->priority], tcb);
+    g_ready_bitmap |= (1u << tcb->priority);
+#endif
 }
 
 //---------------------------------------------------------------------------
@@ -145,10 +151,16 @@ void rtos_task_make_ready(rtos_tcb_t *tcb)
 //---------------------------------------------------------------------------
 static void ready_remove(rtos_tcb_t *tcb)
 {
-    list_remove(&G_READY[tcb->priority], tcb);
-
-    if (!G_READY[tcb->priority])
-        G_READY_BITMAP &= ~(1u << tcb->priority);
+#if RTOS_NUM_CORES > 1
+    uint8_t c = tcb->core;
+    list_remove(&g_ready[c][tcb->priority], tcb);
+    if (!g_ready[c][tcb->priority])
+        g_ready_bitmap[c] &= ~(1u << tcb->priority);
+#else
+    list_remove(&g_ready[tcb->priority], tcb);
+    if (!g_ready[tcb->priority])
+        g_ready_bitmap &= ~(1u << tcb->priority);
+#endif
 }
 
 //---------------------------------------------------------------------------
@@ -174,18 +186,17 @@ static rtos_tcb_t *scheduler_pick_next(void)
 //[]---------------------------------------------------------------------------[]
 
 //---------------------------------------------------------------------------
-// Create a new task. Returns a handle to the task, or NULL on failure.
-// Caller must provide a TCB and stack buffer, which can be on the caller's
-// stack or in static memory. The task will be added to the ready list and
-// may run immediately if it has higher priority than the current task.
+// Internal: create a task pinned to a specified core. Both public APIs call
+// this so the stack init, watermark, and ready_add logic live in one place.
 //---------------------------------------------------------------------------
-rtos_handle_t rtos_task_create(rtos_tcb_t *tcb,
-                               void       *stack,
-                               size_t      stack_words,
-                               void      (*func)(void *),
-                               void       *arg,
-                               const char *name,
-                               uint8_t     priority)
+static rtos_handle_t task_create_impl(rtos_tcb_t *tcb,
+                                      void       *stack,
+                                      size_t      stack_words,
+                                      void      (*func)(void *),
+                                      void       *arg,
+                                      const char *name,
+                                      uint8_t     priority,
+                                      uint8_t     core)
 {
     if (!tcb || !stack || !func || priority >= RTOS_MAX_PRIORITIES)
         return NULL;
@@ -205,6 +216,12 @@ rtos_handle_t rtos_task_create(rtos_tcb_t *tcb,
     tcb->stack_base  = stack;
     tcb->stack_words = stack_words;
     tcb->next        = NULL;
+
+#if RTOS_NUM_CORES > 1
+    tcb->core        = core;
+#else
+    (void)core;
+#endif
 
 #if RTOS_ENABLE_RUNTIME_STATS
     tcb->runtime_ticks = 0;
@@ -247,6 +264,46 @@ rtos_handle_t rtos_task_create(rtos_tcb_t *tcb,
 
     return (rtos_handle_t)tcb;
 }
+
+//---------------------------------------------------------------------------
+// Create a new task on the calling core. Returns a handle to the task, or
+// NULL on failure. Caller must provide a TCB and stack buffer, which can be
+// on the caller's stack or in static memory. The task will be added to the
+// ready list and may run immediately if it has higher priority than the
+// current task.
+//---------------------------------------------------------------------------
+rtos_handle_t rtos_task_create(rtos_tcb_t *tcb,
+                               void       *stack,
+                               size_t      stack_words,
+                               void      (*func)(void *),
+                               void       *arg,
+                               const char *name,
+                               uint8_t     priority)
+{
+#if RTOS_NUM_CORES > 1
+    return task_create_impl(tcb, stack, stack_words, func, arg, name, priority, CORE);
+#else
+    return task_create_impl(tcb, stack, stack_words, func, arg, name, priority, 0);
+#endif
+}
+
+//---------------------------------------------------------------------------
+// Create a task pinned to a specific CPU core. Only available when
+// RTOS_NUM_CORES > 1.
+//---------------------------------------------------------------------------
+#if RTOS_NUM_CORES > 1
+rtos_handle_t rtos_task_create_on_core(rtos_tcb_t *tcb,
+                                       void       *stack,
+                                       size_t      stack_words,
+                                       void      (*func)(void *),
+                                       void       *arg,
+                                       const char *name,
+                                       uint8_t     priority,
+                                       uint8_t     core)
+{
+    return task_create_impl(tcb, stack, stack_words, func, arg, name, priority, core);
+}
+#endif
 
 //---------------------------------------------------------------------------
 // Delay the current task for a number of ticks. If ticks is 0, yield instead.
@@ -605,4 +662,29 @@ void rtos_start(void)
     // Never reached
     for (;;) ;
 }
+
+//---------------------------------------------------------------------------
+// rtos_core1_entry — entry point for core 1. Pass to multicore_launch_core1()
+// before calling rtos_start() on core 0. Configures core 1's SysTick and
+// interrupt priorities, creates core 1's idle task, then starts scheduling.
+// Never returns.
+//---------------------------------------------------------------------------
+#if RTOS_NUM_CORES > 1
+void rtos_core1_entry(void)
+{
+    extern void port_init(uint32_t tick_rate_hz);
+    extern void port_start_first_task(void);
+
+    // SysTick and the ARM SCB priority registers are banked per-core on RP2040,
+    // so calling port_init() here configures this core independently.
+    port_init(RTOS_TICK_RATE_HZ);
+
+    rtos_scheduler_start();
+
+    port_start_first_task();
+
+    // Never reached
+    for (;;) ;
+}
+#endif
 
