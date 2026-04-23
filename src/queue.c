@@ -13,6 +13,8 @@
 extern rtos_tcb_t  *rtos_next_task(void);
 extern rtos_tcb_t **rtos_current_tcb_ptr(void);
 extern void         rtos_task_make_ready(rtos_tcb_t *tcb);
+extern void         rtos_task_blocked_add(rtos_tcb_t *tcb, uint32_t timeout_ticks);
+extern void         rtos_task_blocked_remove(rtos_tcb_t *tcb);
 
 #define current_task() (*rtos_current_tcb_ptr())
 
@@ -77,15 +79,16 @@ int rtos_queue_send(rtos_handle_t handle, const void *item, uint32_t timeout_tic
     }
 
     rtos_tcb_t *self = current_task();
-    self->state       = TASK_BLOCKED;
-    self->delay_ticks = timeout_ticks;
+    self->state = TASK_BLOCKED;
     list_insert_sorted(&q->send_wait, self, self->priority);
+    rtos_task_blocked_add(self, timeout_ticks);
     port_exit_critical();
 
     port_request_reschedule();
 
     port_enter_critical();
     int on_list = list_remove(&q->send_wait, self);
+    if (on_list) rtos_task_blocked_remove(self);
     port_exit_critical();
 
     return on_list ? RTOS_TIMEOUT : RTOS_OK;
@@ -128,19 +131,18 @@ int rtos_queue_receive(rtos_handle_t handle, void *item, uint32_t timeout_ticks)
     }
 
     rtos_tcb_t *self = current_task();
-    self->state       = TASK_BLOCKED;
-    self->delay_ticks = timeout_ticks;
+    self->state = TASK_BLOCKED;
     list_insert_sorted(&q->recv_wait, self, self->priority);
+    rtos_task_blocked_add(self, timeout_ticks);
     port_exit_critical();
 
     port_request_reschedule();
 
-    // Re-enter critical section: if we were woken by a sender the item is in
-    // the queue buffer and we need to consume it; if we timed out we are still
-    // on recv_wait and must remove ourselves.
     port_enter_critical();
     int on_list = list_remove(&q->recv_wait, self);
-    if (!on_list && q->count > 0) {
+    if (on_list) {
+        rtos_task_blocked_remove(self);
+    } else if (q->count > 0) {
         memcpy(item, q->buf + q->head * q->item_size, q->item_size);
         q->head = (q->head + 1) % q->capacity;
         q->count--;

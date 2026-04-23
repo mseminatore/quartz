@@ -11,7 +11,7 @@
 
 // Insert tcb into the list headed by *head, sorted ascending by key.
 // For the ready list the key is priority (lower = higher priority).
-// For the blocked list the key is delay_ticks.
+// For the blocked list the key is wakeup_tick (soonest wakeup first).
 void list_insert_sorted(rtos_tcb_t **head, rtos_tcb_t *tcb, uint32_t key);
 
 // Insert at the tail (for FIFO within same priority).

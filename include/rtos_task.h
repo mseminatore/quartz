@@ -35,12 +35,14 @@ typedef struct rtos_tcb {
     void               *stack_base;              // bottom of stack (for overflow detection)
     size_t              stack_words;
     uint8_t             priority;
+    uint8_t             base_priority;           // original priority before any inheritance boost
     rtos_task_state_t   state;
-    uint32_t            delay_ticks;             // countdown for vTaskDelay
-    uint32_t            sort_key;                // sort key when on blocked or wait list
+    uint32_t            wakeup_tick;             // absolute tick at which task should unblock
+    uint32_t            sort_key;                // sort key when on an IPC wait list
     char                name[RTOS_TASK_NAME_LEN];
     struct rtos_tcb    *next;                    // intrusive list link
     uint8_t             notif_pending;           // non-zero if a notification is waiting
+    uint8_t             on_blocked;              // non-zero when on the per-core blocked list
 #if RTOS_ENABLE_RUNTIME_STATS
     uint32_t            runtime_ticks;           // total ticks this task has been running
 #endif

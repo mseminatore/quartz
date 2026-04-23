@@ -139,10 +139,40 @@ static void ready_add(rtos_tcb_t *tcb)
 }
 
 //---------------------------------------------------------------------------
-// Exposed for semaphore/mutex/queue to unblock a task.
+// Remove a task from the per-core blocked list if it is on it.
+// Caller must be in a critical section (or the only thread accessing g_blocked).
+//---------------------------------------------------------------------------
+void rtos_task_blocked_remove(rtos_tcb_t *tcb)
+{
+    if (!tcb->on_blocked) return;
+    tcb->on_blocked = 0;
+#if RTOS_NUM_CORES > 1
+    list_remove(&g_blocked[tcb->core], tcb);
+#else
+    list_remove(&g_blocked, tcb);
+#endif
+}
+
+//---------------------------------------------------------------------------
+// Add a task to the per-core blocked list sorted by absolute wakeup_tick.
+// Called from IPC primitives when blocking with a finite timeout.
+// Caller must be in a critical section.
+//---------------------------------------------------------------------------
+void rtos_task_blocked_add(rtos_tcb_t *tcb, uint32_t timeout_ticks)
+{
+    if (timeout_ticks == RTOS_WAIT_FOREVER) return;
+    tcb->wakeup_tick = G_TICK_COUNT + timeout_ticks;
+    tcb->on_blocked  = 1;
+    list_insert_sorted(&G_BLOCKED, tcb, tcb->wakeup_tick);
+}
+
+//---------------------------------------------------------------------------
+// Exposed for semaphore/mutex/queue to unblock a task. Also removes the task
+// from the per-core blocked list if it is waiting there with a timeout.
 //---------------------------------------------------------------------------
 void rtos_task_make_ready(rtos_tcb_t *tcb)
 {
+    rtos_task_blocked_remove(tcb);
     ready_add(tcb);
 }
 
@@ -211,8 +241,10 @@ static rtos_handle_t task_create_impl(rtos_tcb_t *tcb,
     
     tcb->name[len]   = '\0';
     tcb->priority    = priority;
+    tcb->base_priority = priority;
     tcb->state       = TASK_READY;
-    tcb->delay_ticks = 0;
+    tcb->wakeup_tick = 0;
+    tcb->on_blocked  = 0;
     tcb->stack_base  = stack;
     tcb->stack_words = stack_words;
     tcb->next        = NULL;
@@ -318,8 +350,9 @@ void rtos_task_delay(uint32_t ticks)
     port_enter_critical();
     ready_remove(G_CURRENT);
     G_CURRENT->state       = TASK_BLOCKED;
-    G_CURRENT->delay_ticks = ticks;
-    list_insert_sorted(&G_BLOCKED, G_CURRENT, ticks);
+    G_CURRENT->wakeup_tick = G_TICK_COUNT + ticks;
+    G_CURRENT->on_blocked  = 1;
+    list_insert_sorted(&G_BLOCKED, G_CURRENT, G_CURRENT->wakeup_tick);
     port_exit_critical();
 
     port_request_reschedule();
@@ -349,7 +382,7 @@ void rtos_task_suspend(rtos_handle_t task)
         ready_remove(tcb);
     } else if (tcb->state == TASK_BLOCKED) 
     {
-        list_remove(&G_BLOCKED, tcb);
+        rtos_task_blocked_remove(tcb);
     }
 
     tcb->state = TASK_SUSPENDED;
@@ -394,7 +427,7 @@ void rtos_task_delete(rtos_handle_t task)
         ready_remove(tcb);
     } else if (tcb->state == TASK_BLOCKED) 
     {
-        list_remove(&G_BLOCKED, tcb);
+        rtos_task_blocked_remove(tcb);
     }
 
     tcb->state = TASK_DELETED;
@@ -447,12 +480,7 @@ void rtos_task_notify(rtos_handle_t task)
     tcb->notif_pending = 1;
 
     if (tcb->state == TASK_BLOCKED) {
-#if RTOS_NUM_CORES > 1
-        list_remove(&g_blocked[tcb->core], tcb);
-#else
-        list_remove(&g_blocked, tcb);
-#endif
-        ready_add(tcb);
+        rtos_task_make_ready(tcb);
     }
 
     port_exit_critical();
@@ -471,12 +499,7 @@ void rtos_task_notify_from_isr(rtos_handle_t task)
     tcb->notif_pending = 1;
 
     if (tcb->state == TASK_BLOCKED) {
-#if RTOS_NUM_CORES > 1
-        list_remove(&g_blocked[tcb->core], tcb);
-#else
-        list_remove(&g_blocked, tcb);
-#endif
-        ready_add(tcb);
+        rtos_task_make_ready(tcb);
     }
 }
 
@@ -500,9 +523,10 @@ int rtos_task_notify_wait(uint32_t timeout_ticks)
     }
 
     G_CURRENT->state       = TASK_BLOCKED;
-    G_CURRENT->delay_ticks = timeout_ticks;
+    G_CURRENT->wakeup_tick = G_TICK_COUNT + timeout_ticks;
+    G_CURRENT->on_blocked  = 1;
     ready_remove(G_CURRENT);
-    list_insert_sorted(&G_BLOCKED, G_CURRENT, timeout_ticks);
+    list_insert_sorted(&G_BLOCKED, G_CURRENT, G_CURRENT->wakeup_tick);
     port_exit_critical();
 
     port_request_reschedule();
@@ -625,14 +649,9 @@ static void idle_task(void *arg)
 //---------------------------------------------------------------------------
 uint32_t rtos_idle_next_wakeup_ticks(void)
 {
-    uint32_t min = RTOS_WAIT_FOREVER;
-    rtos_tcb_t *tcb = G_BLOCKED;
-    while (tcb) {
-        if (tcb->delay_ticks < min)
-            min = tcb->delay_ticks;
-        tcb = tcb->next;
-    }
-    return min;
+    if (!G_BLOCKED) return RTOS_WAIT_FOREVER;
+    uint32_t now = G_TICK_COUNT;
+    return G_BLOCKED->wakeup_tick > now ? G_BLOCKED->wakeup_tick - now : 0;
 }
 
 //---------------------------------------------------------------------------
@@ -640,8 +659,19 @@ uint32_t rtos_idle_next_wakeup_ticks(void)
 //---------------------------------------------------------------------------
 void rtos_tick_advance(uint32_t n)
 {
+    G_TICK_COUNT += n;
+
+    // Unblock all tasks that reached their absolute wakeup tick (O(k))
+    while (G_BLOCKED && G_BLOCKED->wakeup_tick <= G_TICK_COUNT) {
+        rtos_tcb_t *expired = list_pop_head(&G_BLOCKED);
+        expired->on_blocked = 0;
+        ready_add(expired);
+    }
+
+    // Timers use countdowns, so tick them N times to maintain accuracy
+    extern void rtos_timer_tick(void);
     for (uint32_t i = 0; i < n; i++)
-        rtos_tick_handler();
+        rtos_timer_tick();
 }
 
 //---------------------------------------------------------------------------
@@ -656,22 +686,13 @@ void rtos_tick_handler(void)
         G_CURRENT->runtime_ticks++;
 #endif
 
-    // Decrement delay counts; unblock tasks whose delay has expired
-    rtos_tcb_t *tcb = G_BLOCKED;
-
-    while (tcb) 
+    // Unblock tasks whose absolute wakeup tick has arrived.
+    // Blocked list is sorted ascending by wakeup_tick — only check the head (O(k)).
+    while (G_BLOCKED && G_BLOCKED->wakeup_tick <= G_TICK_COUNT)
     {
-        rtos_tcb_t *next = tcb->next;
-        if (tcb->delay_ticks > 0)
-            tcb->delay_ticks--;
-
-        if (tcb->delay_ticks == 0) 
-        {
-            list_remove(&G_BLOCKED, tcb);
-            ready_add(tcb);
-        }
-
-        tcb = next;
+        rtos_tcb_t *expired = list_pop_head(&G_BLOCKED);
+        expired->on_blocked = 0;
+        ready_add(expired);
     }
 
     // Per-tick stack overflow check (lightweight: only tests first sentinel word)

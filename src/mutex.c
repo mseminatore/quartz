@@ -12,6 +12,8 @@
 extern rtos_tcb_t  *rtos_next_task(void);
 extern rtos_tcb_t **rtos_current_tcb_ptr(void);
 extern void         rtos_task_make_ready(rtos_tcb_t *tcb);
+extern void         rtos_task_blocked_add(rtos_tcb_t *tcb, uint32_t timeout_ticks);
+extern void         rtos_task_blocked_remove(rtos_tcb_t *tcb);
 
 #define current_task() (*rtos_current_tcb_ptr())
 
@@ -57,18 +59,35 @@ int rtos_mutex_lock(rtos_handle_t handle, uint32_t timeout_ticks)
         return RTOS_TIMEOUT;
     }
 
-    // Block current task
-    rtos_tcb_t *self = current_task();
-    self->state       = TASK_BLOCKED;
-    self->delay_ticks = timeout_ticks;
+    // Block current task on the mutex wait list and the tick-wakeup list
+    rtos_tcb_t *self  = current_task();
+    rtos_tcb_t *owner = mutex->owner;
+    self->state = TASK_BLOCKED;
     list_insert_sorted(&mutex->wait_list, self, self->priority);
-    
+    rtos_task_blocked_add(self, timeout_ticks);
+
+    // Priority inheritance: if the owner has lower priority (higher number),
+    // boost it so it can release the mutex sooner (single-level, no chain).
+    if (owner && owner->priority > self->priority) {
+        if (owner->state == TASK_READY) {
+            ready_remove(owner);
+            owner->priority = self->priority;
+            ready_add(owner);
+        } else {
+            // TASK_RUNNING or TASK_BLOCKED: just update priority.
+            // Running: takes effect at next context switch.
+            // Blocked: its position on the IPC list is by key, unchanged.
+            owner->priority = self->priority;
+        }
+    }
+
     port_exit_critical();
 
     port_request_reschedule();
 
     port_enter_critical();
     int on_list = list_remove(&mutex->wait_list, self);
+    if (on_list) rtos_task_blocked_remove(self);
     port_exit_critical();
 
     return on_list ? RTOS_TIMEOUT : (RTOS_TRACE_MUTEX_LOCK(mutex), RTOS_OK);
@@ -86,6 +105,11 @@ void rtos_mutex_unlock(rtos_handle_t handle)
     if (!mutex) return;
 
     port_enter_critical();
+
+    // Restore inherited priority before transferring ownership.
+    rtos_tcb_t *self = mutex->owner;
+    if (self && self->priority != self->base_priority)
+        self->priority = self->base_priority;
 
     rtos_tcb_t *waiter = list_pop_head(&mutex->wait_list);
     if (waiter) 

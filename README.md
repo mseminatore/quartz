@@ -8,6 +8,8 @@ A small, portable, hobby-grade RTOS written in C.
 - Clean `rtos_` prefixed snake_case API (`rtos_task_create`, `rtos_task_delay`, `rtos_semaphore_take`, …)
 - Easily portable — architecture-specific code isolated in `port/<arch>/`
 - Host-testable kernel logic (unit tests run on the development machine)
+- O(k) tick handler — only examines the *k* tasks expiring on the current tick, not all blocked tasks
+- Priority-inheritance mutex — prevents unbounded priority inversion (single-level boost)
 
 **Supported targets:** RP2040 (ARM Cortex-M0+), AVR ATmega328P (Arduino Uno/Nano), RISC-V RV32IMAC (QEMU virt / SiFive FE310), ESP32-S3 (Xtensa LX7, Espressif QEMU)
 
@@ -241,9 +243,6 @@ void rtos_task_delete(rtos_handle_t);   // pass NULL for current task
 void rtos_task_notify(rtos_handle_t task);            // from task context
 void rtos_task_notify_from_isr(rtos_handle_t task);  // from ISR context
 int  rtos_task_notify_wait(uint32_t timeout_ticks);  // RTOS_OK or RTOS_TIMEOUT
-void rtos_task_suspend(rtos_handle_t);
-void rtos_task_resume(rtos_handle_t);
-void rtos_task_delete(rtos_handle_t);   // pass NULL for current task
 
 // Debug (compile with RTOS_STACK_OVERFLOW_CHECK / RTOS_STACK_WATERMARK)
 int      rtos_task_check_stack(rtos_handle_t);             // RTOS_OK or RTOS_ERR
@@ -267,6 +266,13 @@ rtos_semaphore_give_from_isr(s);
 ```
 
 ### Mutexes
+
+Mutexes include **priority inheritance**: when a high-priority task blocks waiting for a
+mutex held by a lower-priority task, the owner's priority is temporarily boosted to the
+waiter's level so that a medium-priority task cannot starve the owner (and therefore the
+high-priority waiter).  The boost is restored when the mutex is unlocked.  This is
+single-level inheritance (no chain propagation across nested mutexes).
+
 ```c
 static rtos_mutex_t my_mutex;
 rtos_handle_t m = rtos_mutex_create(&my_mutex);

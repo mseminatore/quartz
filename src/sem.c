@@ -12,6 +12,8 @@
 extern rtos_tcb_t  *rtos_next_task(void);
 extern rtos_tcb_t **rtos_current_tcb_ptr(void);
 extern void         rtos_task_make_ready(rtos_tcb_t *tcb);
+extern void         rtos_task_blocked_add(rtos_tcb_t *tcb, uint32_t timeout_ticks);
+extern void         rtos_task_blocked_remove(rtos_tcb_t *tcb);
 
 #define current_task() (*rtos_current_tcb_ptr())
 
@@ -78,20 +80,21 @@ int rtos_semaphore_take(rtos_handle_t handle, uint32_t timeout_ticks)
         return RTOS_TIMEOUT;
     }
 
-    // Block the current task
+    // Block the current task on the IPC wait list and the tick-wakeup list
     rtos_tcb_t *self = current_task();
-    self->state       = TASK_BLOCKED;
-    self->delay_ticks = timeout_ticks;
+    self->state = TASK_BLOCKED;
     list_insert_sorted(&sem->wait_list, self, self->priority);
+    rtos_task_blocked_add(self, timeout_ticks);
     port_exit_critical();
 
     port_request_reschedule();
 
-    // When we wake up: either we were given the semaphore (count was decremented
-    // for us by xSemaphoreGive) or we timed out.
+    // If we were given the semaphore, we were popped from wait_list by give().
+    // If we timed out, we are still on wait_list and were popped from G_BLOCKED
+    // by the tick handler. Clean up the list we're still on.
     port_enter_critical();
-    // If still on the wait list we timed out; remove ourselves.
     int on_list = list_remove(&sem->wait_list, self);
+    if (on_list) rtos_task_blocked_remove(self);
     port_exit_critical();
 
     return on_list ? RTOS_TIMEOUT : (RTOS_TRACE_SEM_TAKE(sem), RTOS_OK);

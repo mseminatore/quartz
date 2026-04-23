@@ -289,6 +289,180 @@ static void test_delay_until(void)
 static int g_timer_fires = 0;
 static void timer_cb(rtos_handle_t t) { (void)t; g_timer_fires++; }
 
+static void test_ok_tick_handler(void)
+{
+    printf("\n--- O(k) tick handler ---\n");
+
+    // Reset scheduler state for a clean test
+    g_blocked = NULL;
+    g_tick_count = 0;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+
+    static rtos_tcb_t t1, t2;
+    static uint32_t   s1[64], s2[64];
+    rtos_task_create(&t1, s1, 64, (void(*)(void*))1, NULL, "t1", 1);
+    rtos_task_create(&t2, s2, 64, (void(*)(void*))1, NULL, "t2", 2);
+
+    // Block t1 for 10 ticks and t2 for 5 ticks from tick 0
+    g_current = &t1;
+    rtos_task_delay(10);  // wakeup_tick = 10, on_blocked = 1
+    TEST(t1.on_blocked == 1);
+    TEST(t1.wakeup_tick == 10);
+
+    g_current = &t2;
+    rtos_task_delay(5);   // wakeup_tick = 5, on_blocked = 1
+    TEST(t2.on_blocked == 1);
+    TEST(t2.wakeup_tick == 5);
+
+    // Blocked list should have t2 (wakeup=5) before t1 (wakeup=10)
+    TEST(g_blocked == &t2);
+    TEST(g_blocked->next == &t1);
+
+    // Advance 4 ticks — neither should wake
+    rtos_tick_advance(4);
+    TEST(g_tick_count == 4);
+    TEST(t1.on_blocked == 1);
+    TEST(t2.on_blocked == 1);
+
+    // Advance 1 more tick (total 5) — t2 wakes, t1 stays blocked
+    rtos_tick_advance(1);
+    TEST(g_tick_count == 5);
+    TEST(t2.on_blocked == 0);
+    TEST(t2.state == TASK_READY);
+    TEST(t1.on_blocked == 1);
+    TEST(t1.state == TASK_BLOCKED);
+
+    // Advance 5 more ticks (total 10) — t1 wakes
+    rtos_tick_advance(5);
+    TEST(g_tick_count == 10);
+    TEST(t1.on_blocked == 0);
+    TEST(t1.state == TASK_READY);
+    TEST(g_blocked == NULL);
+
+    g_current = NULL;
+    g_tick_count = 0;
+}
+
+static void test_ipc_timeout(void)
+{
+    printf("\n--- IPC timeout via tick handler ---\n");
+
+    g_blocked = NULL;
+    g_tick_count = 0;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+
+    static rtos_tcb_t ta;
+    static uint32_t   sa[64];
+    rtos_task_create(&ta, sa, 64, (void(*)(void*))1, NULL, "ta", 0);
+
+    static rtos_sem_t sem;
+    rtos_handle_t sh = rtos_semaphore_create_binary(&sem);
+
+    // On the host port, port_request_reschedule is a no-op, so rtos_semaphore_take
+    // with a finite timeout never truly suspends — it self-removes and returns TIMEOUT.
+    // What we CAN verify is:
+    //   1. rtos_task_blocked_add correctly inserts into G_BLOCKED
+    //   2. The tick handler pops the head at the right tick
+    //   3. rtos_task_make_ready removes from G_BLOCKED
+
+    // Manually set up the block state (simulating what sem_take would do in hardware)
+    g_current = &ta;
+    ta.state = TASK_BLOCKED;
+    rtos_task_blocked_add(&ta, 8);   // absolute wakeup at tick 8
+    TEST(ta.on_blocked == 1);
+    TEST(ta.wakeup_tick == 8);
+    TEST(g_blocked == &ta);
+
+    // Tick 7: task still blocked
+    rtos_tick_advance(7);
+    TEST(ta.on_blocked == 1);
+
+    // Tick 8: task wakes via tick handler
+    rtos_tick_advance(1);
+    TEST(ta.on_blocked == 0);
+    TEST(ta.state == TASK_READY);
+    TEST(g_blocked == NULL);
+
+    // Verify rtos_task_make_ready removes from G_BLOCKED (IPC give path)
+    g_blocked = NULL;
+    g_tick_count = 0;
+    rtos_task_create(&ta, sa, 64, (void(*)(void*))1, NULL, "ta", 0);
+    g_current = &ta;
+    ta.state = TASK_BLOCKED;
+    rtos_task_blocked_add(&ta, 20);
+    TEST(ta.on_blocked == 1);
+
+    // Give the sem (make_ready path): should remove from G_BLOCKED
+    rtos_task_make_ready(&ta);
+    TEST(ta.on_blocked == 0);
+    TEST(ta.state == TASK_READY);
+    TEST(g_blocked == NULL);
+
+    g_current = NULL;
+    g_tick_count = 0;
+}
+
+static void test_priority_inheritance(void)
+{
+    printf("\n--- priority inheritance ---\n");
+
+    g_blocked = NULL;
+    g_tick_count = 0;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+
+    static rtos_tcb_t low_tcb, high_tcb;
+    static uint32_t   low_stack[64], high_stack[64];
+
+    // Low priority = 3 (higher number = lower priority in this RTOS)
+    rtos_task_create(&low_tcb,  low_stack,  64, (void(*)(void*))1, NULL, "low",  3);
+    rtos_task_create(&high_tcb, high_stack, 64, (void(*)(void*))1, NULL, "high", 0);
+
+    TEST(low_tcb.base_priority == 3);
+    TEST(high_tcb.base_priority == 0);
+
+    // Low-priority task acquires mutex
+    static rtos_mutex_t mtx;
+    rtos_handle_t mh = rtos_mutex_create(&mtx);
+    g_current = &low_tcb;
+    low_tcb.state = TASK_RUNNING;
+    rtos_mutex_lock(mh, RTOS_NO_WAIT);
+    TEST(mtx.owner == &low_tcb);
+    TEST(low_tcb.priority == 3);  // not yet boosted
+
+    // High-priority task tries to lock (times out on host — no real preemption)
+    // The boost should happen BEFORE the timeout cleanup
+    g_current = &high_tcb;
+    high_tcb.state = TASK_RUNNING;
+
+    // Simulate: manually apply the boost that rtos_mutex_lock does internally.
+    // We can't observe mid-lock state from the outside, so we call the function
+    // and verify the end-state: owner priority is restored when waiter times out
+    // and then cleaned up on unlock.
+    //
+    // Instead: call rtos_task_blocked_add + the boost logic directly by using
+    // a finite timeout that forces the waiter path. Verify post-lock state.
+    int r = rtos_mutex_lock(mh, 1);   // timeout=1 tick; returns TIMEOUT on host
+    TEST(r == RTOS_TIMEOUT);
+
+    // After the timeout, the waiter removed itself from wait_list.
+    // Owner priority was boosted inside rtos_mutex_lock and remains boosted
+    // until the owner unlocks (single-level implementation).
+    TEST(low_tcb.priority == 0);  // boosted to high_tcb's priority
+    TEST(low_tcb.base_priority == 3);  // base unchanged
+
+    // Owner unlocks: priority restored before transferring ownership
+    g_current = &low_tcb;
+    low_tcb.state = TASK_RUNNING;
+    rtos_mutex_unlock(mh);
+    TEST(low_tcb.priority == 3);      // restored to base
+    TEST(mtx.owner == NULL);          // unlocked (no waiter)
+
+    g_current = NULL;
+}
+
 static void test_timers(void)
 {
     printf("\n--- timers ---\n");
@@ -342,6 +516,9 @@ int main(void)
     test_timers();
     test_task_notify();
     test_delay_until();
+    test_ok_tick_handler();
+    test_ipc_timeout();
+    test_priority_inheritance();
 
     printf("\n%d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
