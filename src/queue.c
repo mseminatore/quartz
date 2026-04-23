@@ -79,7 +79,7 @@ int rtos_queue_send(rtos_handle_t handle, const void *item, uint32_t timeout_tic
     rtos_tcb_t *self = current_task();
     self->state       = TASK_BLOCKED;
     self->delay_ticks = timeout_ticks;
-    list_insert_tail(&q->send_wait, self);
+    list_insert_sorted(&q->send_wait, self, self->priority);
     port_exit_critical();
 
     port_request_reschedule();
@@ -130,7 +130,7 @@ int rtos_queue_receive(rtos_handle_t handle, void *item, uint32_t timeout_ticks)
     rtos_tcb_t *self = current_task();
     self->state       = TASK_BLOCKED;
     self->delay_ticks = timeout_ticks;
-    list_insert_tail(&q->recv_wait, self);
+    list_insert_sorted(&q->recv_wait, self, self->priority);
     port_exit_critical();
 
     port_request_reschedule();

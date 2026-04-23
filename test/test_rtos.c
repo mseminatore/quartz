@@ -195,6 +195,97 @@ static void test_queue(void)
     TEST(rtos_queue_messages_waiting(h) == 0);
 }
 
+static void test_list_sorted(void)
+{
+    printf("\n--- list_insert_sorted ---\n");
+
+    static rtos_tcb_t a, b, c, d;
+    a.sort_key = 10; b.sort_key = 5; c.sort_key = 20; d.sort_key = 5;
+    a.next = b.next = c.next = d.next = NULL;
+
+    rtos_tcb_t *head = NULL;
+    list_insert_sorted(&head, &a, 10);
+    list_insert_sorted(&head, &b, 5);   // should become new head
+    list_insert_sorted(&head, &c, 20);  // should go to tail
+    list_insert_sorted(&head, &d, 5);   // tie — after b (FIFO within same key)
+
+    TEST(head == &b);
+    TEST(head->next == &d);
+    TEST(head->next->next == &a);
+    TEST(head->next->next->next == &c);
+    TEST(head->next->next->next->next == NULL);
+}
+
+static void test_task_notify(void)
+{
+    printf("\n--- task notifications ---\n");
+
+    static rtos_tcb_t tcb;
+    static uint32_t stack[64];
+    rtos_handle_t h = rtos_task_create(&tcb, stack, 64, (void(*)(void*))1, NULL, "n", 0);
+    TEST(h != NULL);
+
+    // notif_pending starts clear
+    TEST(tcb.notif_pending == 0);
+
+    // Notify sets the flag
+    rtos_task_notify(h);
+    TEST(tcb.notif_pending == 1);
+
+    // notify_wait with pending notification returns OK immediately (flag cleared)
+    // Simulate the task as current so notify_wait can manipulate it
+    g_current = &tcb;
+    tcb.state = TASK_RUNNING;
+    int r = rtos_task_notify_wait(RTOS_NO_WAIT);
+    TEST(r == RTOS_OK);
+    TEST(tcb.notif_pending == 0);
+
+    // notify_wait with no notification and NO_WAIT returns TIMEOUT
+    r = rtos_task_notify_wait(RTOS_NO_WAIT);
+    TEST(r == RTOS_TIMEOUT);
+
+    // notify_from_isr also sets the flag
+    rtos_task_notify_from_isr(h);
+    TEST(tcb.notif_pending == 1);
+
+    g_current = NULL;
+}
+
+static void test_delay_until(void)
+{
+    printf("\n--- rtos_task_delay_until ---\n");
+
+    static rtos_tcb_t tcb;
+    static uint32_t stack[64];
+    rtos_task_create(&tcb, stack, 64, (void(*)(void*))1, NULL, "du", 0);
+    g_current = &tcb;
+    tcb.state = TASK_RUNNING;
+
+    // Manually advance tick counter for the test
+    g_tick_count = 50;
+
+    uint32_t wake = 50;
+
+    // delay_until(50 → 50+20=70): current tick is 50 → should delay 20
+    // (port_request_reschedule is a no-op on host; just verify no crash + wake advances)
+    rtos_task_delay_until(&wake, 20);
+    TEST(wake == 70);  // wake advanced to 70
+
+    // Simulate ticks passing: tick is now 75 (overrun)
+    g_tick_count = 75;
+    wake = 70;
+    rtos_task_delay_until(&wake, 20);  // next deadline = 90, delay = 15
+    TEST(wake == 90);
+
+    // If already past deadline (overrun), should not block (delay <= 0)
+    g_tick_count = 100;
+    wake = 90;
+    rtos_task_delay_until(&wake, 5);  // next = 95, already past → no delay
+    TEST(wake == 95);
+
+    g_current = NULL;
+    g_tick_count = 0;
+}
 static int g_timer_fires = 0;
 static void timer_cb(rtos_handle_t t) { (void)t; g_timer_fires++; }
 
@@ -243,11 +334,14 @@ int main(void)
     printf("RTOS unit tests\n");
 
     test_list();
+    test_list_sorted();
     test_task_create();
     test_semaphore();
     test_mutex();
     test_queue();
     test_timers();
+    test_task_notify();
+    test_delay_until();
 
     printf("\n%d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

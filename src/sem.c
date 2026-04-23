@@ -82,7 +82,7 @@ int rtos_semaphore_take(rtos_handle_t handle, uint32_t timeout_ticks)
     rtos_tcb_t *self = current_task();
     self->state       = TASK_BLOCKED;
     self->delay_ticks = timeout_ticks;
-    list_insert_tail(&sem->wait_list, self);
+    list_insert_sorted(&sem->wait_list, self, self->priority);
     port_exit_critical();
 
     port_request_reschedule();

@@ -61,7 +61,7 @@ int rtos_mutex_lock(rtos_handle_t handle, uint32_t timeout_ticks)
     rtos_tcb_t *self = current_task();
     self->state       = TASK_BLOCKED;
     self->delay_ticks = timeout_ticks;
-    list_insert_tail(&mutex->wait_list, self);
+    list_insert_sorted(&mutex->wait_list, self, self->priority);
     
     port_exit_critical();
 

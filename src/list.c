@@ -8,13 +8,27 @@
 
 //---------------------------------------------------------------------------
 // Insert tcb into the list headed by *head, sorted ascending by key.
-// For the ready list the key is priority (lower = higher priority).
-// For the blocked list the key is delay_ticks.
+// Lower key values are closer to the head.
+// Used for the blocked list (key = delay_ticks: soonest wakeup first) and
+// for IPC wait lists (key = priority: highest-priority waiter = lowest number first).
 //---------------------------------------------------------------------------
 void list_insert_sorted(rtos_tcb_t **head, rtos_tcb_t *tcb, uint32_t key)
 {
-    (void)key;  // placeholder until scheduler uses it
-    list_insert_tail(head, tcb);
+    tcb->sort_key = key;
+    tcb->next = NULL;
+
+    if (!*head || key < (*head)->sort_key) {
+        tcb->next = *head;
+        *head = tcb;
+        return;
+    }
+
+    rtos_tcb_t *cur = *head;
+    while (cur->next && cur->next->sort_key <= key)
+        cur = cur->next;
+
+    tcb->next = cur->next;
+    cur->next = tcb;
 }
 
 //---------------------------------------------------------------------------

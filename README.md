@@ -225,7 +225,22 @@ rtos_handle_t h = rtos_task_create_on_core(&my_tcb, my_stack, 256,
                                             1 /* core */);
 
 void rtos_task_delay(uint32_t ticks);   // block for N ticks
+
+// Drift-free periodic delay. Initialise *last_wake to rtos_task_tick_count()
+// before the loop, then call on each iteration. Advances *last_wake by period
+// each call, delaying only the remaining time until the next deadline.
+void rtos_task_delay_until(uint32_t *last_wake_tick, uint32_t period_ticks);
+
 void rtos_task_yield(void);
+void rtos_task_suspend(rtos_handle_t);
+void rtos_task_resume(rtos_handle_t);
+void rtos_task_delete(rtos_handle_t);   // pass NULL for current task
+
+// Task notifications — lightweight per-task binary semaphore, zero extra
+// allocation. Common pattern for ISR→task or task→task signaling.
+void rtos_task_notify(rtos_handle_t task);            // from task context
+void rtos_task_notify_from_isr(rtos_handle_t task);  // from ISR context
+int  rtos_task_notify_wait(uint32_t timeout_ticks);  // RTOS_OK or RTOS_TIMEOUT
 void rtos_task_suspend(rtos_handle_t);
 void rtos_task_resume(rtos_handle_t);
 void rtos_task_delete(rtos_handle_t);   // pass NULL for current task

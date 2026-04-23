@@ -420,6 +420,102 @@ uint32_t rtos_task_tick_count(void)
 }
 
 //---------------------------------------------------------------------------
+// Delay until an absolute tick deadline, eliminating period drift.
+// *last_wake_tick is updated to the next deadline on each call.
+//---------------------------------------------------------------------------
+void rtos_task_delay_until(uint32_t *last_wake_tick, uint32_t period_ticks)
+{
+    uint32_t next = *last_wake_tick + period_ticks;
+    *last_wake_tick = next;
+
+    uint32_t now = G_TICK_COUNT;
+    int32_t remaining = (int32_t)(next - now);
+    if (remaining > 0)
+        rtos_task_delay((uint32_t)remaining);
+}
+
+//---------------------------------------------------------------------------
+// Send a notification to a task. If the task is blocked waiting for a
+// notification, unblock it immediately.
+//---------------------------------------------------------------------------
+void rtos_task_notify(rtos_handle_t task)
+{
+    rtos_tcb_t *tcb = (rtos_tcb_t *)task;
+    if (!tcb) return;
+
+    port_enter_critical();
+    tcb->notif_pending = 1;
+
+    if (tcb->state == TASK_BLOCKED) {
+#if RTOS_NUM_CORES > 1
+        list_remove(&g_blocked[tcb->core], tcb);
+#else
+        list_remove(&g_blocked, tcb);
+#endif
+        ready_add(tcb);
+    }
+
+    port_exit_critical();
+    port_request_reschedule();
+}
+
+//---------------------------------------------------------------------------
+// Send a notification from an ISR. Does not trigger a reschedule — the
+// caller must call port_request_reschedule() if needed.
+//---------------------------------------------------------------------------
+void rtos_task_notify_from_isr(rtos_handle_t task)
+{
+    rtos_tcb_t *tcb = (rtos_tcb_t *)task;
+    if (!tcb) return;
+
+    tcb->notif_pending = 1;
+
+    if (tcb->state == TASK_BLOCKED) {
+#if RTOS_NUM_CORES > 1
+        list_remove(&g_blocked[tcb->core], tcb);
+#else
+        list_remove(&g_blocked, tcb);
+#endif
+        ready_add(tcb);
+    }
+}
+
+//---------------------------------------------------------------------------
+// Wait for a notification. Clears the pending flag and returns RTOS_OK when
+// notified. Returns RTOS_TIMEOUT if the timeout expires.
+//---------------------------------------------------------------------------
+int rtos_task_notify_wait(uint32_t timeout_ticks)
+{
+    port_enter_critical();
+
+    if (G_CURRENT->notif_pending) {
+        G_CURRENT->notif_pending = 0;
+        port_exit_critical();
+        return RTOS_OK;
+    }
+
+    if (timeout_ticks == RTOS_NO_WAIT) {
+        port_exit_critical();
+        return RTOS_TIMEOUT;
+    }
+
+    G_CURRENT->state       = TASK_BLOCKED;
+    G_CURRENT->delay_ticks = timeout_ticks;
+    ready_remove(G_CURRENT);
+    list_insert_sorted(&G_BLOCKED, G_CURRENT, timeout_ticks);
+    port_exit_critical();
+
+    port_request_reschedule();
+
+    port_enter_critical();
+    int notified = G_CURRENT->notif_pending;
+    G_CURRENT->notif_pending = 0;
+    port_exit_critical();
+
+    return notified ? RTOS_OK : RTOS_TIMEOUT;
+}
+
+//---------------------------------------------------------------------------
 // Debug: check whether a task's stack sentinel is still intact.
 //---------------------------------------------------------------------------
 int rtos_task_check_stack(rtos_handle_t task)

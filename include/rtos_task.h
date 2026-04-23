@@ -37,8 +37,10 @@ typedef struct rtos_tcb {
     uint8_t             priority;
     rtos_task_state_t   state;
     uint32_t            delay_ticks;             // countdown for vTaskDelay
+    uint32_t            sort_key;                // sort key when on blocked or wait list
     char                name[RTOS_TASK_NAME_LEN];
     struct rtos_tcb    *next;                    // intrusive list link
+    uint8_t             notif_pending;           // non-zero if a notification is waiting
 #if RTOS_ENABLE_RUNTIME_STATS
     uint32_t            runtime_ticks;           // total ticks this task has been running
 #endif
@@ -77,6 +79,11 @@ void rtos_core1_entry(void);
 // Delay the calling task for the given number of ticks.
 void rtos_task_delay(uint32_t ticks);
 
+// Delay until an absolute tick deadline. Eliminates period drift for periodic
+// tasks. *last_wake_tick should be initialised to rtos_task_tick_count() before
+// the first call. On each call it is advanced by period_ticks.
+void rtos_task_delay_until(uint32_t *last_wake_tick, uint32_t period_ticks);
+
 // Voluntarily yield the CPU to the next ready task.
 void rtos_task_yield(void);
 
@@ -89,6 +96,23 @@ void rtos_task_delete(rtos_handle_t task);
 
 // Return the current tick count.
 uint32_t rtos_task_tick_count(void);
+
+// ---------------------------------------------------------------------------
+// Task notifications — per-task lightweight binary semaphore, zero allocation.
+// ---------------------------------------------------------------------------
+
+// Send a notification to a task (from task context). If the task is blocked
+// waiting for a notification, it is unblocked immediately.
+void rtos_task_notify(rtos_handle_t task);
+
+// Send a notification from an ISR. Does not call port_request_reschedule();
+// the caller must trigger a reschedule if the target task has higher priority.
+void rtos_task_notify_from_isr(rtos_handle_t task);
+
+// Wait for a notification. Returns RTOS_OK when notified, RTOS_TIMEOUT if
+// the timeout expires before a notification arrives. Pass RTOS_WAIT_FOREVER
+// to block indefinitely.
+int rtos_task_notify_wait(uint32_t timeout_ticks);
 
 // ---------------------------------------------------------------------------
 // Debug / instrumentation APIs
