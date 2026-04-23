@@ -217,6 +217,13 @@ static uint32_t   my_stack[256];
 
 rtos_handle_t h = rtos_task_create(&my_tcb, my_stack, 256,
                                    my_task_func, NULL, "myTask", 3);
+
+// AMP: pin a task to a specific core regardless of which core calls this.
+// Only available when RTOS_NUM_CORES > 1.
+rtos_handle_t h = rtos_task_create_on_core(&my_tcb, my_stack, 256,
+                                            my_task_func, NULL, "myTask", 3,
+                                            1 /* core */);
+
 void rtos_task_delay(uint32_t ticks);   // block for N ticks
 void rtos_task_yield(void);
 void rtos_task_suspend(rtos_handle_t);
@@ -226,6 +233,10 @@ void rtos_task_delete(rtos_handle_t);   // pass NULL for current task
 // Debug (compile with RTOS_STACK_OVERFLOW_CHECK / RTOS_STACK_WATERMARK)
 int      rtos_task_check_stack(rtos_handle_t);             // RTOS_OK or RTOS_ERR
 uint32_t rtos_task_stack_high_water_mark(rtos_handle_t);   // words never written
+
+// AMP: pass to multicore_launch_core1() to start core 1's scheduler.
+// Only available when RTOS_NUM_CORES > 1.
+void rtos_core1_entry(void);
 ```
 
 ### Semaphores
@@ -376,25 +387,28 @@ sections.
 - **Critical sections** (`RTOS_NUM_CORES > 1`): first disable IRQs (`cpsid i`), then
   claim **SIO spinlock 0** (RP2040) so the other core cannot enter simultaneously.
   Release order is reversed: drop spinlock, re-enable IRQs.
-- Tasks are created on the core that calls `rtos_task_create()` — there is no migration.
-  Use `rtos_queue_send` / `rtos_queue_receive` across cores for all inter-core data.
+- Use `rtos_task_create_on_core(tcb, stack, words, fn, arg, name, prio, core)` to pin
+  a task to a specific core — callable from either core, from `main()` before the
+  scheduler starts. `rtos_task_create()` pins to the calling core.
+- There is **no task migration** — a task stays on its home core for its lifetime.
+  Use `rtos_queue_send` / `rtos_queue_receive` across cores for inter-core data.
 
 ### RP2040 startup pattern
 
-Core 1 is started via the SIO FIFO (see RP2040 datasheet §2.8.2).  Call `rtos_start()`
-independently on each core:
+Pin all tasks to their cores from `main()` using `rtos_task_create_on_core()`, then
+pass the built-in `rtos_core1_entry` to `multicore_launch_core1()` before calling
+`rtos_start()`. `rtos_core1_entry` configures core 1's SysTick, creates its idle task,
+and starts its scheduler — no user-written entry wrapper is needed.
 
 ```c
 #include "rtos.h"
 #include "pico/multicore.h"   // Raspberry Pi Pico SDK
 
-static rtos_tcb_t   c1_task_tcb;
-static uint32_t     c1_task_stack[256];
+static rtos_tcb_t   c0_tcb, c1_tcb;
+static uint32_t     c0_stack[256], c1_stack[256];
 static rtos_queue_t shared_queue;
 static uint8_t      shared_buf[4 * sizeof(uint32_t)];
-
-// Shared queue — initialized by core 0 before launching core 1
-rtos_handle_t g_queue;
+rtos_handle_t       g_queue;
 
 static void core1_task(void *arg)
 {
@@ -405,17 +419,6 @@ static void core1_task(void *arg)
             printf("core1 got %lu\n", (unsigned long)val);
     }
 }
-
-static void core1_entry(void)
-{
-    rtos_task_create(&c1_task_tcb, c1_task_stack, 256,
-                     core1_task, NULL, "c1task", 1);
-    rtos_start();   // core 1 never returns here
-}
-
-// Core 0 task — sends to the shared queue
-static rtos_tcb_t   c0_task_tcb;
-static uint32_t     c0_task_stack[256];
 
 static void core0_task(void *arg)
 {
@@ -430,16 +433,16 @@ static void core0_task(void *arg)
 
 int main(void)
 {
-    // Initialize shared queue before starting core 1
+    // Create shared queue before any task runs
     g_queue = rtos_queue_create(&shared_queue, shared_buf, sizeof(uint32_t), 4);
 
-    // Launch core 1
-    multicore_launch_core1(core1_entry);
+    // Pin tasks to their cores — callable from main() before either scheduler starts
+    rtos_task_create_on_core(&c0_tcb, c0_stack, 256, core0_task, NULL, "c0", 1, 0);
+    rtos_task_create_on_core(&c1_tcb, c1_stack, 256, core1_task, NULL, "c1", 1, 1);
 
-    // Core 0 tasks
-    rtos_task_create(&c0_task_tcb, c0_task_stack, 256,
-                     core0_task, NULL, "c0task", 1);
-    rtos_start();   // core 0 never returns
+    // Start core 1's scheduler, then core 0's (rtos_start never returns)
+    multicore_launch_core1(rtos_core1_entry);
+    rtos_start();
 }
 ```
 
