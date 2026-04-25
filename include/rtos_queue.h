@@ -38,6 +38,11 @@ int rtos_queue_receive(rtos_handle_t queue, void *item, uint32_t timeout_ticks);
 // ISR-safe Send. Returns RTOS_OK or RTOS_ERR (full). Does not block.
 int rtos_queue_send_from_isr(rtos_handle_t queue, const void *item);
 
+// ISR-safe Receive. Returns RTOS_OK or RTOS_ERR (empty). Does not block.
+// Unblocks a waiting sender if one is present; caller must call
+// port_request_reschedule() if a higher-priority task was unblocked.
+int rtos_queue_receive_from_isr(rtos_handle_t queue, void *item);
+
 // Return the number of items currently in the queue.
 size_t rtos_queue_messages_waiting(rtos_handle_t queue);
 

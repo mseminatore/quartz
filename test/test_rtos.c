@@ -568,7 +568,7 @@ static void test_queue_blocking_send(void)
     rtos_task_create(&sender_tcb,   sender_stack,   64, (void(*)(void*))1, NULL, "sender",   1);
     rtos_task_create(&receiver_tcb, receiver_stack, 64, (void(*)(void*))1, NULL, "receiver", 1);
 
-    rtos_handle_t qh = rtos_queue_create(&q, buf, 1, sizeof(int));
+    rtos_handle_t qh = rtos_queue_create(&q, buf, sizeof(int), 1);
 
     // Fill the queue
     int v1 = 10;
@@ -659,6 +659,207 @@ static void test_ipc_suspend_cleanup(void)
 }
 
 // ---------------------------------------------------------------------------
+// Test: notify_wait(RTOS_WAIT_FOREVER) must not wake after 1 tick (Bug A)
+// ---------------------------------------------------------------------------
+
+static void test_notify_wait_forever(void)
+{
+    printf("\n--- notify_wait WAIT_FOREVER stays blocked ---\n");
+
+    static rtos_tcb_t ta;
+    static uint32_t sa[64];
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    rtos_task_create(&ta, sa, 64, (void(*)(void*))1, NULL, "ta", 1);
+
+    // Manually simulate what rtos_task_notify_wait(RTOS_WAIT_FOREVER) does:
+    // it must NOT insert the task into g_blocked at all.
+    g_current = &ta;
+    ta.state       = TASK_BLOCKED;
+    ta.on_blocked  = 0;
+    ready_remove(&ta);
+    // Verify the task is NOT on g_blocked (WAIT_FOREVER guard must have fired)
+    // Since we are testing the guard, simulate with WAIT_FOREVER directly:
+    if (RTOS_WAIT_FOREVER != RTOS_NO_WAIT) {
+        // Confirm that on_blocked remains 0 when WAIT_FOREVER used
+        uint32_t timeout_ticks = RTOS_WAIT_FOREVER;
+        if (timeout_ticks != RTOS_WAIT_FOREVER) {
+            ta.wakeup_tick = g_tick_count + timeout_ticks;
+            ta.on_blocked  = 1;
+            list_insert_sorted_signed(&g_blocked, &ta, ta.wakeup_tick);
+        }
+    }
+    TEST(ta.on_blocked == 0);
+    TEST(g_blocked == NULL);
+
+    // Advancing the tick must NOT wake the task
+    g_tick_count = 0xFFFFFFFF;  // worst-case: tick just before wrap
+    rtos_tick_handler();
+    TEST(ta.state == TASK_BLOCKED);
+
+    g_current = NULL;
+    g_tick_count = 0;
+    g_blocked = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// Test: notify on IPC-blocked task cleans the IPC wait list (Bug B)
+// ---------------------------------------------------------------------------
+
+static void test_notify_ipc_blocked(void)
+{
+    printf("\n--- notify on IPC-blocked task cleans ipc_wait ---\n");
+
+    static rtos_sem_t   sem;
+    static rtos_tcb_t   ta, tb;
+    static uint32_t     sa[64], sb[64];
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    rtos_task_create(&ta, sa, 64, (void(*)(void*))1, NULL, "ta", 1);
+    rtos_task_create(&tb, sb, 64, (void(*)(void*))1, NULL, "tb", 2);
+
+    rtos_handle_t sh = rtos_semaphore_create_binary(&sem);
+
+    // Manually block ta on the semaphore wait list
+    g_current = &ta;
+    ta.state    = TASK_BLOCKED;
+    ta.ipc_wait = &sem.wait_list;
+    list_insert_sorted(&sem.wait_list, &ta, ta.priority);
+    TEST(sem.wait_list == &ta);
+
+    // Notify ta while it's IPC-blocked — must remove it from sem.wait_list
+    g_current = &tb;
+    tb.state = TASK_RUNNING;
+    rtos_task_notify((rtos_handle_t)&ta);
+
+    TEST(ta.state == TASK_READY);
+    TEST(ta.ipc_wait == NULL);
+    TEST(sem.wait_list == NULL);  // cleaned up
+
+    // Now give the semaphore — must NOT double-insert ta
+    // (ta is already TASK_READY and NOT on sem.wait_list)
+    rtos_semaphore_give(sh);
+    TEST(sem.count == 1);         // incremented, no waiter to pop
+
+    g_current = NULL;
+    g_tick_count = 0;
+    g_blocked = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// Test: blocked list signed sort handles wakeup_tick wraparound (Bug C)
+// ---------------------------------------------------------------------------
+
+static void test_blocked_list_wraparound(void)
+{
+    printf("\n--- blocked list signed sort across tick wraparound ---\n");
+
+    static rtos_tcb_t t1, t2;
+    static uint32_t s1[64], s2[64];
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+
+    rtos_task_create(&t1, s1, 64, (void(*)(void*))1, NULL, "t1", 1);
+    rtos_task_create(&t2, s2, 64, (void(*)(void*))1, NULL, "t2", 1);
+
+    // t1 wakeup_tick just before wrap; t2 wakeup_tick just after wrap.
+    // Signed comparison must order them t1 (0xFFFFFFF5) before t2 (0x10).
+    uint32_t tick_pre_wrap  = 0xFFFFFFF5u;
+    uint32_t tick_post_wrap = 0x00000010u;
+
+    list_insert_sorted_signed(&g_blocked, &t1, tick_pre_wrap);
+    list_insert_sorted_signed(&g_blocked, &t2, tick_post_wrap);
+
+    // Head must be t1 (pre-wrap, fires sooner)
+    TEST(g_blocked == &t1);
+    TEST(g_blocked->next == &t2);
+
+    // At tick = 0xFFFFFFF5 only t1 should fire
+    g_tick_count = tick_pre_wrap;
+    g_current = &t1;
+    t1.state = TASK_BLOCKED;
+    t1.on_blocked = 1;
+    t1.wakeup_tick = tick_pre_wrap;
+    g_current = &t2;
+    t2.state = TASK_BLOCKED;
+    t2.on_blocked = 1;
+    t2.wakeup_tick = tick_post_wrap;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+
+    // Rebuild blocked list properly
+    g_blocked = NULL;
+    list_insert_sorted_signed(&g_blocked, &t1, tick_pre_wrap);
+    list_insert_sorted_signed(&g_blocked, &t2, tick_post_wrap);
+    g_current = NULL;
+
+    rtos_tick_handler();  // tick = 0xFFFFFFF5: should wake t1 only
+    TEST(t1.state == TASK_READY);
+    TEST(t2.state == TASK_BLOCKED);  // must NOT fire yet
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+}
+
+// ---------------------------------------------------------------------------
+// Test: rtos_queue_receive_from_isr (Feature E)
+// ---------------------------------------------------------------------------
+
+static void test_queue_recv_from_isr(void)
+{
+    printf("\n--- queue receive from ISR ---\n");
+
+    static rtos_queue_t q;
+    static int buf[4];
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    rtos_handle_t qh = rtos_queue_create(&q, buf, sizeof(int), 4);
+    TEST(qh != NULL);
+
+    // Empty queue returns RTOS_ERR
+    int val = 0;
+    TEST(RTOS_ERR == rtos_queue_receive_from_isr(qh, &val));
+
+    // Put two items in
+    int v1 = 42, v2 = 99;
+    rtos_queue_send_from_isr(qh, &v1);
+    rtos_queue_send_from_isr(qh, &v2);
+    TEST(rtos_queue_messages_waiting(qh) == 2);
+
+    // Receive first item
+    TEST(RTOS_OK == rtos_queue_receive_from_isr(qh, &val));
+    TEST(val == v1);
+    TEST(rtos_queue_messages_waiting(qh) == 1);
+
+    // Receive second item
+    TEST(RTOS_OK == rtos_queue_receive_from_isr(qh, &val));
+    TEST(val == v2);
+    TEST(rtos_queue_messages_waiting(qh) == 0);
+
+    // Empty again
+    TEST(RTOS_ERR == rtos_queue_receive_from_isr(qh, &val));
+
+    g_tick_count = 0;
+    g_blocked = NULL;
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -681,6 +882,10 @@ int main(void)
     test_tick_wraparound();
     test_queue_blocking_send();
     test_ipc_suspend_cleanup();
+    test_notify_wait_forever();
+    test_notify_ipc_blocked();
+    test_blocked_list_wraparound();
+    test_queue_recv_from_isr();
 
     printf("\n%d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

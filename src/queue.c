@@ -195,8 +195,25 @@ int rtos_queue_send_from_isr(rtos_handle_t handle, const void *item)
 }
 
 //---------------------------------------------------------------------------
-// Get the number of items currently in the queue.
+// Receive an item from the queue from an ISR. Returns RTOS_ERR if the queue
+// is empty. Does not block. Unblocks a waiting sender if one is present —
+// the caller is responsible for calling port_request_reschedule() if a
+// higher-priority task was made ready.
 //---------------------------------------------------------------------------
+int rtos_queue_receive_from_isr(rtos_handle_t handle, void *item)
+{
+    rtos_queue_t *q = (rtos_queue_t *)handle;
+    if (!q || !item || q->count == 0) return RTOS_ERR;
+
+    memcpy(item, q->buf + q->head * q->item_size, q->item_size);
+    q->head = (q->head + 1) % q->capacity;
+    q->count--;
+
+    rtos_tcb_t *waiter = list_pop_head(&q->send_wait);
+    if (waiter) rtos_task_make_ready(waiter);
+
+    return RTOS_OK;
+}
 size_t rtos_queue_messages_waiting(rtos_handle_t handle)
 {
     rtos_queue_t *q = (rtos_queue_t *)handle;

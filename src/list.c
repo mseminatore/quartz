@@ -32,6 +32,33 @@ void list_insert_sorted(rtos_tcb_t **head, rtos_tcb_t *tcb, uint32_t key)
 }
 
 //---------------------------------------------------------------------------
+// Insert into a blocked list using signed comparison to handle wakeup_tick
+// wraparound correctly. When wakeup_tick crosses uint32_t max, unsigned
+// comparison would misorder entries; signed subtraction gives correct
+// relative ordering across the rollover point.
+// Use ONLY for G_BLOCKED; IPC wait lists (keyed by priority) use the
+// unsigned version above.
+//---------------------------------------------------------------------------
+void list_insert_sorted_signed(rtos_tcb_t **head, rtos_tcb_t *tcb, uint32_t key)
+{
+    tcb->sort_key = key;
+    tcb->next = NULL;
+
+    if (!*head || (int32_t)(key - (*head)->sort_key) < 0) {
+        tcb->next = *head;
+        *head = tcb;
+        return;
+    }
+
+    rtos_tcb_t *cur = *head;
+    while (cur->next && (int32_t)(key - cur->next->sort_key) >= 0)
+        cur = cur->next;
+
+    tcb->next = cur->next;
+    cur->next = tcb;
+}
+
+//---------------------------------------------------------------------------
 // Insert at the tail (for FIFO within same priority).
 //---------------------------------------------------------------------------
 void list_insert_tail(rtos_tcb_t **head, rtos_tcb_t *tcb)

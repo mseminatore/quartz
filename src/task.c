@@ -163,7 +163,7 @@ void rtos_task_blocked_add(rtos_tcb_t *tcb, uint32_t timeout_ticks)
     if (timeout_ticks == RTOS_WAIT_FOREVER) return;
     tcb->wakeup_tick = G_TICK_COUNT + timeout_ticks;
     tcb->on_blocked  = 1;
-    list_insert_sorted(&G_BLOCKED, tcb, tcb->wakeup_tick);
+    list_insert_sorted_signed(&G_BLOCKED, tcb, tcb->wakeup_tick);
 }
 
 //---------------------------------------------------------------------------
@@ -353,7 +353,7 @@ void rtos_task_delay(uint32_t ticks)
     G_CURRENT->state       = TASK_BLOCKED;
     G_CURRENT->wakeup_tick = G_TICK_COUNT + ticks;
     G_CURRENT->on_blocked  = 1;
-    list_insert_sorted(&G_BLOCKED, G_CURRENT, G_CURRENT->wakeup_tick);
+    list_insert_sorted_signed(&G_BLOCKED, G_CURRENT, G_CURRENT->wakeup_tick);
     port_exit_critical();
 
     port_request_reschedule();
@@ -489,6 +489,10 @@ void rtos_task_notify(rtos_handle_t task)
     tcb->notif_pending = 1;
 
     if (tcb->state == TASK_BLOCKED) {
+        if (tcb->ipc_wait) {
+            list_remove(tcb->ipc_wait, tcb);
+            tcb->ipc_wait = NULL;
+        }
         rtos_task_make_ready(tcb);
     }
 
@@ -508,6 +512,10 @@ void rtos_task_notify_from_isr(rtos_handle_t task)
     tcb->notif_pending = 1;
 
     if (tcb->state == TASK_BLOCKED) {
+        if (tcb->ipc_wait) {
+            list_remove(tcb->ipc_wait, tcb);
+            tcb->ipc_wait = NULL;
+        }
         rtos_task_make_ready(tcb);
     }
 }
@@ -531,11 +539,13 @@ int rtos_task_notify_wait(uint32_t timeout_ticks)
         return RTOS_TIMEOUT;
     }
 
-    G_CURRENT->state       = TASK_BLOCKED;
-    G_CURRENT->wakeup_tick = G_TICK_COUNT + timeout_ticks;
-    G_CURRENT->on_blocked  = 1;
+    G_CURRENT->state = TASK_BLOCKED;
     ready_remove(G_CURRENT);
-    list_insert_sorted(&G_BLOCKED, G_CURRENT, G_CURRENT->wakeup_tick);
+    if (timeout_ticks != RTOS_WAIT_FOREVER) {
+        G_CURRENT->wakeup_tick = G_TICK_COUNT + timeout_ticks;
+        G_CURRENT->on_blocked  = 1;
+        list_insert_sorted_signed(&G_BLOCKED, G_CURRENT, G_CURRENT->wakeup_tick);
+    }
     port_exit_critical();
 
     port_request_reschedule();
