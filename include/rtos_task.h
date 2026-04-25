@@ -43,6 +43,7 @@ typedef struct rtos_tcb {
     struct rtos_tcb    *next;                    // intrusive list link
     uint8_t             notif_pending;           // non-zero if a notification is waiting
     uint8_t             on_blocked;              // non-zero when on the per-core blocked list
+    struct rtos_tcb   **ipc_wait;               // pointer to the IPC wait-list head this task is on (NULL if none)
 #if RTOS_ENABLE_RUNTIME_STATS
     uint32_t            runtime_ticks;           // total ticks this task has been running
 #endif

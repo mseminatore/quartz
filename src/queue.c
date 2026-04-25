@@ -80,6 +80,7 @@ int rtos_queue_send(rtos_handle_t handle, const void *item, uint32_t timeout_tic
 
     rtos_tcb_t *self = current_task();
     self->state = TASK_BLOCKED;
+    self->ipc_wait = &q->send_wait;
     list_insert_sorted(&q->send_wait, self, self->priority);
     rtos_task_blocked_add(self, timeout_ticks);
     port_exit_critical();
@@ -88,7 +89,22 @@ int rtos_queue_send(rtos_handle_t handle, const void *item, uint32_t timeout_tic
 
     port_enter_critical();
     int on_list = list_remove(&q->send_wait, self);
-    if (on_list) rtos_task_blocked_remove(self);
+    if (on_list) {
+        rtos_task_blocked_remove(self);
+    } else if (q->count < q->capacity) {
+        // We were woken because a receiver made space; complete the send now.
+        memcpy(q->buf + q->tail * q->item_size, item, q->item_size);
+        q->tail = (q->tail + 1) % q->capacity;
+        q->count++;
+        // Unblock a receiver that may have started waiting in the meantime.
+        rtos_tcb_t *waiter = list_pop_head(&q->recv_wait);
+        if (waiter) rtos_task_make_ready(waiter);
+    } else {
+        // The free slot was filled by another task before we re-entered the
+        // critical section. Treat as a failed send (caller should retry).
+        on_list = 1;
+    }
+    self->ipc_wait = NULL;
     port_exit_critical();
 
     return on_list ? RTOS_TIMEOUT : RTOS_OK;
@@ -132,6 +148,7 @@ int rtos_queue_receive(rtos_handle_t handle, void *item, uint32_t timeout_ticks)
 
     rtos_tcb_t *self = current_task();
     self->state = TASK_BLOCKED;
+    self->ipc_wait = &q->recv_wait;
     list_insert_sorted(&q->recv_wait, self, self->priority);
     rtos_task_blocked_add(self, timeout_ticks);
     port_exit_critical();
@@ -146,10 +163,12 @@ int rtos_queue_receive(rtos_handle_t handle, void *item, uint32_t timeout_ticks)
         memcpy(item, q->buf + q->head * q->item_size, q->item_size);
         q->head = (q->head + 1) % q->capacity;
         q->count--;
+        RTOS_TRACE_QUEUE_RECEIVE(q);
         // Unblock a sender that may have been waiting for space
         rtos_tcb_t *waiter = list_pop_head(&q->send_wait);
         if (waiter) rtos_task_make_ready(waiter);
     }
+    self->ipc_wait = NULL;
     port_exit_critical();
 
     return on_list ? RTOS_TIMEOUT : RTOS_OK;

@@ -245,6 +245,7 @@ static rtos_handle_t task_create_impl(rtos_tcb_t *tcb,
     tcb->state       = TASK_READY;
     tcb->wakeup_tick = 0;
     tcb->on_blocked  = 0;
+    tcb->ipc_wait    = NULL;
     tcb->stack_base  = stack;
     tcb->stack_words = stack_words;
     tcb->next        = NULL;
@@ -383,6 +384,10 @@ void rtos_task_suspend(rtos_handle_t task)
     } else if (tcb->state == TASK_BLOCKED) 
     {
         rtos_task_blocked_remove(tcb);
+        if (tcb->ipc_wait) {
+            list_remove(tcb->ipc_wait, tcb);
+            tcb->ipc_wait = NULL;
+        }
     }
 
     tcb->state = TASK_SUSPENDED;
@@ -428,6 +433,10 @@ void rtos_task_delete(rtos_handle_t task)
     } else if (tcb->state == TASK_BLOCKED) 
     {
         rtos_task_blocked_remove(tcb);
+        if (tcb->ipc_wait) {
+            list_remove(tcb->ipc_wait, tcb);
+            tcb->ipc_wait = NULL;
+        }
     }
 
     tcb->state = TASK_DELETED;
@@ -651,7 +660,9 @@ uint32_t rtos_idle_next_wakeup_ticks(void)
 {
     if (!G_BLOCKED) return RTOS_WAIT_FOREVER;
     uint32_t now = G_TICK_COUNT;
-    return G_BLOCKED->wakeup_tick > now ? G_BLOCKED->wakeup_tick - now : 0;
+    // Use signed subtraction so the result is correct after uint32_t wraparound.
+    int32_t diff = (int32_t)(G_BLOCKED->wakeup_tick - now);
+    return diff > 0 ? (uint32_t)diff : 0;
 }
 
 //---------------------------------------------------------------------------
@@ -661,8 +672,9 @@ void rtos_tick_advance(uint32_t n)
 {
     G_TICK_COUNT += n;
 
-    // Unblock all tasks that reached their absolute wakeup tick (O(k))
-    while (G_BLOCKED && G_BLOCKED->wakeup_tick <= G_TICK_COUNT) {
+    // Unblock all tasks that reached their absolute wakeup tick (O(k)).
+    // Signed subtraction handles uint32_t wraparound correctly.
+    while (G_BLOCKED && (int32_t)(G_TICK_COUNT - G_BLOCKED->wakeup_tick) >= 0) {
         rtos_tcb_t *expired = list_pop_head(&G_BLOCKED);
         expired->on_blocked = 0;
         ready_add(expired);
@@ -688,7 +700,8 @@ void rtos_tick_handler(void)
 
     // Unblock tasks whose absolute wakeup tick has arrived.
     // Blocked list is sorted ascending by wakeup_tick — only check the head (O(k)).
-    while (G_BLOCKED && G_BLOCKED->wakeup_tick <= G_TICK_COUNT)
+    // Use signed subtraction so the comparison is correct after uint32_t wraparound.
+    while (G_BLOCKED && (int32_t)(G_TICK_COUNT - G_BLOCKED->wakeup_tick) >= 0)
     {
         rtos_tcb_t *expired = list_pop_head(&G_BLOCKED);
         expired->on_blocked = 0;
@@ -704,9 +717,13 @@ void rtos_tick_handler(void)
     }
 #endif
 
-    // Fire software timers
+    // Fire software timers — only on core 0; g_timer_list is a single global
+    // shared across cores and must not be walked concurrently by both SysTick ISRs.
     extern void rtos_timer_tick(void);
-    rtos_timer_tick();
+#if RTOS_NUM_CORES > 1
+    if (port_core_id() == 0)
+#endif
+        rtos_timer_tick();
 
     port_request_reschedule();
 }

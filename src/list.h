@@ -1,7 +1,7 @@
 //---------------------------------------------------------------------------
 // Copyright 2025. All rights reserved.
 //
-// Internal priority-sorted doubly-linked list.
+// Internal priority-sorted singly-linked list.
 // Used by the ready list and blocked list in the scheduler.
 //---------------------------------------------------------------------------
 #ifndef RTOS_LIST_H

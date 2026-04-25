@@ -63,6 +63,7 @@ int rtos_mutex_lock(rtos_handle_t handle, uint32_t timeout_ticks)
     rtos_tcb_t *self  = current_task();
     rtos_tcb_t *owner = mutex->owner;
     self->state = TASK_BLOCKED;
+    self->ipc_wait = &mutex->wait_list;
     list_insert_sorted(&mutex->wait_list, self, self->priority);
     rtos_task_blocked_add(self, timeout_ticks);
 
@@ -88,6 +89,7 @@ int rtos_mutex_lock(rtos_handle_t handle, uint32_t timeout_ticks)
     port_enter_critical();
     int on_list = list_remove(&mutex->wait_list, self);
     if (on_list) rtos_task_blocked_remove(self);
+    self->ipc_wait = NULL;
     port_exit_critical();
 
     return on_list ? RTOS_TIMEOUT : (RTOS_TRACE_MUTEX_LOCK(mutex), RTOS_OK);

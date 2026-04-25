@@ -8,10 +8,7 @@
 
 #include <stdint.h>
 #include "rtos_config.h"
-#include "rtos_task.h"
-
-// Forward declaration for callback signature
-typedef void *rtos_handle_t;
+#include "rtos_task.h"   // defines rtos_handle_t
 
 // Timer storage — declare as a static variable and pass its address.
 typedef struct rtos_timer {

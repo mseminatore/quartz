@@ -9,6 +9,8 @@
 #include "port.h"
 
 static rtos_timer_t *g_timer_list = NULL;  // singly-linked active timer list
+                                            // owned by core 0 — only rtos_tick_handler
+                                            // on core 0 calls rtos_timer_tick()
 
 //---------------------------------------------------------------------------
 // Create a timer. The caller must provide storage for the timer struct, 

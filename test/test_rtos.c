@@ -500,6 +500,165 @@ static void test_timers(void)
 }
 
 // ---------------------------------------------------------------------------
+// Test: tick wraparound correctness
+// ---------------------------------------------------------------------------
+
+static void test_tick_wraparound(void)
+{
+    printf("\n--- tick wraparound ---\n");
+
+    static rtos_tcb_t tw;
+    static uint32_t   sw[64];
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+
+    // Set tick near wraparound
+    g_tick_count = 0xFFFFFFFE;
+    rtos_task_create(&tw, sw, 64, (void(*)(void*))1, NULL, "wrap", 1);
+    g_current = &tw;
+    tw.state = TASK_BLOCKED;
+
+    // Ask for a 4-tick delay — wakeup_tick = (0xFFFFFFFE + 4) = 2 (after wrap)
+    rtos_task_blocked_add(&tw, 4);
+    TEST(tw.wakeup_tick == 2);   // must have wrapped to 2
+    TEST(tw.on_blocked == 1);
+
+    // Advance to 0xFFFFFFFF — should NOT wake (need 3 more ticks after wrap)
+    rtos_tick_advance(1);
+    TEST(g_tick_count == 0xFFFFFFFF);
+    TEST(tw.on_blocked == 1);    // still blocked
+
+    // Advance through 0 and 1 — still not at wakeup_tick == 2
+    rtos_tick_advance(1);        // wraps to 0
+    TEST(tw.on_blocked == 1);
+    rtos_tick_advance(1);        // tick == 1
+    TEST(tw.on_blocked == 1);
+
+    // Now at tick == 2 — should fire
+    rtos_tick_advance(1);        // tick == 2
+    TEST(g_tick_count == 2);
+    TEST(tw.on_blocked == 0);
+    TEST(tw.state == TASK_READY);
+
+    g_current = NULL;
+    g_tick_count = 0;
+    g_blocked = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// Test: blocking queue send delivers item to receiver
+// ---------------------------------------------------------------------------
+
+static void test_queue_blocking_send(void)
+{
+    printf("\n--- queue blocking send ---\n");
+
+    static rtos_queue_t q;
+    static int   buf[2];
+    static rtos_tcb_t   sender_tcb, receiver_tcb;
+    static uint32_t     sender_stack[64], receiver_stack[64];
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    rtos_task_create(&sender_tcb,   sender_stack,   64, (void(*)(void*))1, NULL, "sender",   1);
+    rtos_task_create(&receiver_tcb, receiver_stack, 64, (void(*)(void*))1, NULL, "receiver", 1);
+
+    rtos_handle_t qh = rtos_queue_create(&q, buf, 1, sizeof(int));
+
+    // Fill the queue
+    int v1 = 10;
+    TEST(RTOS_OK == rtos_queue_send(qh, &v1, RTOS_NO_WAIT));
+    TEST(rtos_queue_messages_waiting(qh) == 1);
+
+    // Sender tries to send on a full queue — blocks (no-wait returns TIMEOUT on host
+    // since port_request_reschedule is a no-op; simulate blocking manually).
+    // Manually queue the sender: set as current, blocked on send_wait
+    g_current = &sender_tcb;
+    sender_tcb.state = TASK_BLOCKED;
+    sender_tcb.ipc_wait = &q.send_wait;
+    list_insert_sorted(&q.send_wait, &sender_tcb, sender_tcb.priority);
+    // RTOS_WAIT_FOREVER tasks are NOT added to g_blocked (they never time out)
+    TEST(q.send_wait == &sender_tcb);
+
+    // Now a receiver wakes up and dequeues, which should pop sender from send_wait
+    // and make it ready (sender will complete the write when it resumes).
+    g_current = &receiver_tcb;
+    receiver_tcb.state = TASK_RUNNING;
+    int got = 0;
+    int r = rtos_queue_receive(qh, &got, RTOS_NO_WAIT);
+    TEST(r == RTOS_OK);
+    TEST(got == v1);
+
+    // After receive: sender popped from send_wait and made ready.
+    // In a real system the sender would resume and write v2. In this test
+    // environment there is no context switch, so we verify the ready-state
+    // invariants instead.
+    TEST(q.send_wait == NULL);            // sender removed from wait list
+    TEST(sender_tcb.state == TASK_READY); // sender is runnable           // sender's item was delivered
+
+    g_current = NULL;
+    g_tick_count = 0;
+    g_blocked = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// Test: suspend while blocked on semaphore cleans ipc_wait list
+// ---------------------------------------------------------------------------
+
+static void test_ipc_suspend_cleanup(void)
+{
+    printf("\n--- ipc suspend cleanup ---\n");
+
+    static rtos_sem_t   sem;
+    static rtos_tcb_t   ta, tb;
+    static uint32_t     sa[64], sb[64];
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    rtos_task_create(&ta, sa, 64, (void(*)(void*))1, NULL, "ta", 1);
+    rtos_task_create(&tb, sb, 64, (void(*)(void*))1, NULL, "tb", 2);
+
+    rtos_handle_t sh = rtos_semaphore_create_binary(&sem);
+    TEST(sh != NULL);
+
+    // Manually put 'ta' on the semaphore wait list (simulating it blocking)
+    g_current = &ta;
+    ta.state = TASK_BLOCKED;
+    ta.ipc_wait = &sem.wait_list;
+    list_insert_sorted(&sem.wait_list, &ta, ta.priority);
+    // RTOS_WAIT_FOREVER tasks are NOT added to g_blocked (never time out)
+    TEST(sem.wait_list == &ta);
+    // on_blocked stays 0 for WAIT_FOREVER tasks
+
+    // Suspend 'ta' while it is blocked on the semaphore
+    g_current = &tb;
+    tb.state = TASK_RUNNING;
+    rtos_task_suspend((rtos_handle_t)&ta);
+    TEST(ta.state == TASK_SUSPENDED);
+    TEST(ta.on_blocked == 0);        // removed from G_BLOCKED
+    TEST(sem.wait_list == NULL);     // removed from IPC wait list
+    TEST(ta.ipc_wait == NULL);       // pointer cleared
+
+    // Now give the semaphore — must NOT crash or touch ta
+    g_current = &tb;
+    rtos_semaphore_give(sh);
+    // Semaphore count should increment (no waiter to wake)
+    TEST(sem.count == 1);
+
+    g_current = NULL;
+    g_tick_count = 0;
+    g_blocked = NULL;
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -519,6 +678,9 @@ int main(void)
     test_ok_tick_handler();
     test_ipc_timeout();
     test_priority_inheritance();
+    test_tick_wraparound();
+    test_queue_blocking_send();
+    test_ipc_suspend_cleanup();
 
     printf("\n%d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

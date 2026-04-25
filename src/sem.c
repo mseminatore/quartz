@@ -83,6 +83,7 @@ int rtos_semaphore_take(rtos_handle_t handle, uint32_t timeout_ticks)
     // Block the current task on the IPC wait list and the tick-wakeup list
     rtos_tcb_t *self = current_task();
     self->state = TASK_BLOCKED;
+    self->ipc_wait = &sem->wait_list;
     list_insert_sorted(&sem->wait_list, self, self->priority);
     rtos_task_blocked_add(self, timeout_ticks);
     port_exit_critical();
@@ -95,6 +96,7 @@ int rtos_semaphore_take(rtos_handle_t handle, uint32_t timeout_ticks)
     port_enter_critical();
     int on_list = list_remove(&sem->wait_list, self);
     if (on_list) rtos_task_blocked_remove(self);
+    self->ipc_wait = NULL;
     port_exit_critical();
 
     return on_list ? RTOS_TIMEOUT : (RTOS_TRACE_SEM_TAKE(sem), RTOS_OK);
