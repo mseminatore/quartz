@@ -45,7 +45,11 @@ rtos/
 ├── samples/
 │   ├── blink.c                  # Single task + delay (LED blink)
 │   ├── producer_consumer.c      # Queue: producer sends, consumer receives
-│   └── mutex_shared_resource.c  # Mutex: two tasks sharing a counter
+│   ├── mutex_shared_resource.c  # Mutex: two tasks sharing a counter
+│   ├── uart_echo.c              # ISR→task decoupling via ring buffer + task notification
+│   ├── adc_pipeline.c           # 100 Hz ADC sampling pipeline with queue + rolling average
+│   ├── wifi_http.c              # Pico W: WiFi connect + HTTP GET (semaphore sequencing)
+│   └── lwipopts.h               # Minimal lwIP config for wifi_http
 ├── cmake/
 │   ├── avr_atmega328p.cmake   # avr-gcc toolchain file
 │   ├── riscv32_clint.cmake    # riscv64-unknown-elf-gcc toolchain file (rv32imac)
@@ -576,14 +580,60 @@ int main(void)
 
 ## Samples
 
-Three runnable demos are in `samples/`. They build and run on the host (macOS / Linux) using the `port/host/` simulation port; on RP2040 the hardware stubs are replaced with real GPIO/UART calls via `#ifdef __rp2040__`.
+### General samples (host + RP2040)
+
+Six demos in `samples/`. They build and run on the host (macOS / Linux) via
+the `port/host/` simulation port; on RP2040 the hardware stubs are replaced
+with real GPIO/UART/ADC calls via `#ifdef __rp2040__`.
+
+| Binary | Concepts demonstrated |
+|---|---|
+| `sample_blink` | Single task, `rtos_task_delay_until` for drift-free 500 ms LED blink |
+| `sample_producer_consumer` | Queue: producer sends integers, consumer prints them |
+| `sample_mutex_shared_resource` | Mutex: two tasks increment a shared counter safely |
+| `sample_uart_echo` | ISR → task decoupling: UART RX ISR fills ring buffer, notifies task via `rtos_task_notify_from_isr` |
+| `sample_adc_pipeline` | Sampling pipeline: 100 Hz sampler (`rtos_task_delay_until`) → queue → rolling-average monitor task |
 
 ```sh
 cmake -B build && cmake --build build
-./build/sample_blink                  # single task, LED blink via rtos_task_delay
-./build/sample_producer_consumer      # queue: producer sends ints, consumer prints them
-./build/sample_mutex_shared_resource  # mutex: two tasks share a counter safely
+./build/sample_blink
+./build/sample_producer_consumer
+./build/sample_mutex_shared_resource
+./build/sample_uart_echo          # type characters; press Enter to see a line echoed
+./build/sample_adc_pipeline       # prints simulated temperature readings every second
 ```
+
+### Pico W–specific samples
+
+Two additional samples target RP2040 hardware; `wifi_http` requires a Pico W
+(CYW43 WiFi chip).
+
+| Binary | Concepts demonstrated |
+|---|---|
+| `sample_uart_echo` | Same as above, but wired to UART0 (GP0/GP1, 115200 baud) |
+| `sample_adc_pipeline` | Same as above, reading the RP2040 internal temperature sensor (ADC ch 4) |
+| `sample_wifi_http` | Binary semaphore sequences WiFi-connect task → HTTP-client task; LED blink task runs concurrently |
+
+```sh
+export PICO_SDK_PATH=~/pico-sdk
+
+# Pico / Pico W — uart_echo and adc_pipeline
+cmake -B build_pico -DPICO_BOARD=pico_w
+cmake --build build_pico
+# Flash build_pico/sample_uart_echo.uf2 or sample_adc_pipeline.uf2
+
+# Pico W — WiFi HTTP client (supply your network credentials)
+cmake -B build_picow \
+      -DPICO_BOARD=pico_w \
+      -DWIFI_SSID="YourNetwork" \
+      -DWIFI_PASSWORD="YourPassword"
+cmake --build build_picow
+# Flash build_picow/sample_wifi_http.uf2
+# Open USB serial; the device prints its public IP every 30 seconds
+```
+
+`wifi_http` requires `lwipopts.h` (provided in `samples/`) which configures
+lwIP for the Pico W background-IRQ integration.
 
 ---
 

@@ -199,11 +199,52 @@ if(NOT RTOS_TARGET_PICO AND NOT RTOS_TARGET_AVR AND NOT RTOS_TARGET_RISCV AND NO
     # Sample programs (host simulation — hardware calls are stubbed inside each file)
     # ---------------------------------------------------------------------------
 
-    foreach(sample blink producer_consumer mutex_shared_resource)
+    foreach(sample blink producer_consumer mutex_shared_resource uart_echo adc_pipeline)
         add_executable(sample_${sample} samples/${sample}.c
                        ${RTOS_KERNEL_SOURCES}
                        port/host/port.c)
         target_include_directories(sample_${sample} PRIVATE include src)
         target_compile_options(sample_${sample} PRIVATE -fno-builtin)
+        if(sample STREQUAL "adc_pipeline")
+            target_link_libraries(sample_${sample} m)  # sinf for host stub
+        endif()
     endforeach()
+endif()
+
+# ---------------------------------------------------------------------------
+# Pico SDK samples (RP2040 / Pico W)
+# ---------------------------------------------------------------------------
+
+if(RTOS_TARGET_PICO)
+    # uart_echo and adc_pipeline — work on any RP2040 or Pico W
+    foreach(sample uart_echo adc_pipeline)
+        add_executable(sample_${sample} samples/${sample}.c)
+        target_link_libraries(sample_${sample} rtos pico_stdlib hardware_adc)
+        target_include_directories(sample_${sample} PRIVATE include)
+        if(sample STREQUAL "adc_pipeline")
+            target_link_libraries(sample_${sample} m)
+        endif()
+        pico_add_extra_outputs(sample_${sample})
+        pico_enable_stdio_usb(sample_${sample} 1)
+        pico_enable_stdio_uart(sample_${sample} 0)
+    endforeach()
+
+    # wifi_http — Pico W only (requires CYW43 WiFi chip)
+    if(PICO_BOARD STREQUAL "pico_w")
+        add_executable(sample_wifi_http samples/wifi_http.c)
+        target_link_libraries(sample_wifi_http
+            rtos
+            pico_stdlib
+            pico_cyw43_arch_lwip_threadsafe_background
+        )
+        target_include_directories(sample_wifi_http PRIVATE include samples)
+        target_compile_definitions(sample_wifi_http PRIVATE
+            PICO_W=1
+            WIFI_SSID="${WIFI_SSID}"
+            WIFI_PASSWORD="${WIFI_PASSWORD}"
+        )
+        pico_add_extra_outputs(sample_wifi_http)
+        pico_enable_stdio_usb(sample_wifi_http 1)
+        pico_enable_stdio_uart(sample_wifi_http 0)
+    endif()
 endif()
