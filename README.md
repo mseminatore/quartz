@@ -11,7 +11,7 @@ A small, portable, hobby-grade RTOS written in C.
 - O(k) tick handler — only examines the *k* tasks expiring on the current tick, not all blocked tasks
 - Priority-inheritance mutex — prevents unbounded priority inversion (single-level boost)
 
-**Supported targets:** RP2040 (ARM Cortex-M0+), AVR ATmega328P (Arduino Uno/Nano), RISC-V RV32IMAC (QEMU virt / SiFive FE310), ESP32-S3 (Xtensa LX7, Espressif QEMU)
+**Supported targets:** RP2040 (ARM Cortex-M0+), ARM Cortex-M4F (generic bare-metal, e.g. STM32F4xx), AVR ATmega328P (Arduino Uno/Nano), RISC-V RV32IMAC (QEMU virt / SiFive FE310), ESP32-S3 (Xtensa LX7, Espressif QEMU)
 
 ---
 
@@ -37,6 +37,7 @@ rtos/
 │   └── list.c        # Internal sorted linked list
 ├── port/
 │   ├── arm_cm0plus/       # SysTick, PendSV context switch (RP2040)
+│   ├── arm_cm4/           # SysTick, BASEPRI critical sections, PendSV (generic M4F)
 │   ├── avr_atmega/        # Timer1 CTC, cli/sei, ISR_NAKED context switch (ATmega328P)
 │   ├── riscv/             # CLINT timer, machine-mode trap handler (RV32IMAC)
 │   ├── xtensa_esp32s3/    # TIMG0 timer, interrupt matrix, Xtensa level-1 ISR (ESP32-S3)
@@ -48,7 +49,8 @@ rtos/
 ├── cmake/
 │   ├── avr_atmega328p.cmake   # avr-gcc toolchain file
 │   ├── riscv32_clint.cmake    # riscv64-unknown-elf-gcc toolchain file (rv32imac)
-│   └── esp32s3_qemu.cmake     # xtensa-esp32s3-elf-gcc toolchain file (Call0 ABI)
+│   ├── esp32s3_qemu.cmake     # xtensa-esp32s3-elf-gcc toolchain file (Call0 ABI)
+│   └── arm_cm4.cmake          # arm-none-eabi-gcc toolchain file (Cortex-M4F)
 ├── test/
 │   └── test_rtos.c   # Host-side unit tests
 └── CMakeLists.txt
@@ -203,6 +205,42 @@ qemu-system-xtensa -machine esp32s3 -nographic \
 - Interrupt routing: Peripheral source 10 (TG0_T0_LEVEL_INT) → Interrupt Matrix → CPU slot 6 → level-1 ISR.
 - Context frame: 18 words (72 bytes) — EPC1, EPS1, SAR, a0, a2–a15. `sp` is stored in the TCB.
 
+### ARM Cortex-M4F (generic — e.g. STM32F4xx)
+
+Requires `arm-none-eabi-gcc`.
+On macOS: `brew install arm-none-eabi-gcc`.
+On Ubuntu: `sudo apt install gcc-arm-none-eabi`.
+
+```sh
+# Cross-compile for generic Cortex-M4F (168 MHz default CPU clock)
+cmake -B build_cm4 \
+      -DCMAKE_TOOLCHAIN_FILE=cmake/arm_cm4.cmake
+cmake --build build_cm4
+
+# Override CPU clock for a different board (e.g. STM32F3xx at 72 MHz):
+cmake -B build_cm4 \
+      -DCMAKE_TOOLCHAIN_FILE=cmake/arm_cm4.cmake \
+      -DRTOS_CPU_HZ=72000000
+```
+
+You will also need to supply a board-specific linker script (`-T device.ld`) and startup
+file (`startup_stm32f4xx.s`) in your application's CMakeLists.  The kernel library
+(`librtos.a`) links cleanly without them.
+
+**Key differences from the Cortex-M0+ port:**
+- **BASEPRI-based critical sections** (not PRIMASK): interrupts with numeric priority
+  lower than `RTOS_BASEPRI_VALUE >> 4` remain active during critical sections, enabling
+  safety-critical ISRs to preempt the kernel.  Default threshold is priority 5
+  (`RTOS_BASEPRI_VALUE=0x50`); override with `-DRTOS_BASEPRI_VALUE=0x40` etc.
+- Any ISR that calls RTOS APIs (e.g. `rtos_semaphore_give_from_isr`) must be
+  configured at a numeric priority **≥** `RTOS_BASEPRI_VALUE >> 4`.
+- **Simplified assembly**: Thumb-2 `stmdb`/`ldmia` save/restore R4–R11 in a single
+  instruction each (no two-step dance needed for R8–R11).
+- **FPU note**: this port saves R4–R11 only.  If tasks use floating-point instructions
+  (hard-float ABI), the S16–S31 callee-saved FP registers must also be saved around
+  context switches.  `port_init_stack` and `port_asm.S` would need to be extended;
+  a future `RTOS_CM4_FPU=1` option is planned.
+
 ---
 
 ### Kernel
@@ -243,6 +281,15 @@ void rtos_task_delete(rtos_handle_t);   // pass NULL for current task
 void rtos_task_notify(rtos_handle_t task);            // from task context
 void rtos_task_notify_from_isr(rtos_handle_t task);  // from ISR context
 int  rtos_task_notify_wait(uint32_t timeout_ticks);  // RTOS_OK or RTOS_TIMEOUT
+void rtos_task_notify_clear(void);   // discard a pending notification without waiting
+
+// Inspection and priority control
+rtos_task_state_t rtos_task_get_state(rtos_handle_t task);    // TASK_READY etc.
+const char       *rtos_task_get_name(rtos_handle_t task);
+uint8_t           rtos_task_get_priority(rtos_handle_t task); // effective priority
+int               rtos_task_set_priority(rtos_handle_t task, uint8_t prio);
+                                      // prio must be 0 .. RTOS_MAX_PRIORITIES-2
+                                      // returns RTOS_OK or RTOS_ERR; pass NULL for self
 
 // Debug (compile with RTOS_STACK_OVERFLOW_CHECK / RTOS_STACK_WATERMARK)
 int      rtos_task_check_stack(rtos_handle_t);             // RTOS_OK or RTOS_ERR
@@ -262,7 +309,8 @@ rtos_handle_t s = rtos_semaphore_create_counting(&my_sem, max, initial);
 
 rtos_semaphore_give(s);
 rtos_semaphore_take(s, RTOS_WAIT_FOREVER);   // returns RTOS_OK or RTOS_TIMEOUT
-rtos_semaphore_give_from_isr(s);
+rtos_semaphore_give_from_isr(s);             // ISR-safe give; does not reschedule
+int rtos_semaphore_take_from_isr(s);         // ISR-safe try-take; RTOS_OK or RTOS_ERR
 ```
 
 ### Mutexes
@@ -298,10 +346,19 @@ rtos_queue_messages_waiting(q);
 ```c
 static rtos_timer_t my_timer;
 rtos_handle_t t = rtos_timer_create(&my_timer, "blink", 500, /*periodic=*/1, blink_cb);
-rtos_timer_start(t);
+rtos_timer_start(t);   // fails silently if RTOS_MAX_TIMERS active timers already exist
 rtos_timer_stop(t);
-rtos_timer_reset(t);
+rtos_timer_reset(t);   // restart countdown from full period (starts if not active)
+int running = rtos_timer_is_active(t);  // 1 if active, 0 otherwise
 ```
+
+Timer callbacks are invoked from the tick ISR (normal mode) or from the idle task (tickless
+idle mode).  Callbacks must not call `rtos_timer_reset()` on the timer that is currently
+firing.  Calling `rtos_timer_stop()` on the currently-firing timer from its own callback
+is supported.
+
+Software timers use an **O(k)** sorted-list approach: the active timer list is kept sorted
+by absolute expiry tick so the tick handler only inspects the head, not all timers.
 
 ---
 

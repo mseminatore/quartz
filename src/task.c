@@ -125,7 +125,7 @@ __attribute__((weak)) void rtos_trace_task_delete(rtos_tcb_t *t)       { (void)t
 // Add a task to the ready list and set its state to TASK_READY. Caller must 
 // be in critical section.
 //---------------------------------------------------------------------------
-static void ready_add(rtos_tcb_t *tcb)
+void ready_add(rtos_tcb_t *tcb)
 {
     tcb->state = TASK_READY;
 #if RTOS_NUM_CORES > 1
@@ -179,7 +179,7 @@ void rtos_task_make_ready(rtos_tcb_t *tcb)
 //---------------------------------------------------------------------------
 // Remove a task from the ready list. Caller must be in critical section.
 //---------------------------------------------------------------------------
-static void ready_remove(rtos_tcb_t *tcb)
+void ready_remove(rtos_tcb_t *tcb)
 {
 #if RTOS_NUM_CORES > 1
     uint8_t c = tcb->core;
@@ -664,15 +664,23 @@ static void idle_task(void *arg)
 }
 
 //---------------------------------------------------------------------------
-// Tickless: walk blocked list, return ticks until the soonest wakeup.
+// Tickless: walk blocked list and check active timers; return ticks until
+// the soonest wakeup event. Returns RTOS_WAIT_FOREVER only when both lists
+// are empty or all blocked entries have RTOS_WAIT_FOREVER timeouts.
 //---------------------------------------------------------------------------
 uint32_t rtos_idle_next_wakeup_ticks(void)
 {
-    if (!G_BLOCKED) return RTOS_WAIT_FOREVER;
     uint32_t now = G_TICK_COUNT;
-    // Use signed subtraction so the result is correct after uint32_t wraparound.
-    int32_t diff = (int32_t)(G_BLOCKED->wakeup_tick - now);
-    return diff > 0 ? (uint32_t)diff : 0;
+    uint32_t task_ticks = RTOS_WAIT_FOREVER;
+    if (G_BLOCKED) {
+        int32_t diff = (int32_t)(G_BLOCKED->wakeup_tick - now);
+        task_ticks = diff > 0 ? (uint32_t)diff : 0;
+    }
+
+    extern uint32_t rtos_timer_min_remaining(void);
+    uint32_t timer_ticks = rtos_timer_min_remaining();
+
+    return task_ticks < timer_ticks ? task_ticks : timer_ticks;
 }
 
 //---------------------------------------------------------------------------
@@ -690,10 +698,10 @@ void rtos_tick_advance(uint32_t n)
         ready_add(expired);
     }
 
-    // Timers use countdowns, so tick them N times to maintain accuracy
-    extern void rtos_timer_tick(void);
-    for (uint32_t i = 0; i < n; i++)
-        rtos_timer_tick();
+    // Process all timers due within the elapsed window in a single call.
+    // rtos_timer_tick handles periodic timers that should fire multiple times.
+    extern void rtos_timer_tick(uint32_t now);
+    rtos_timer_tick(G_TICK_COUNT);
 }
 
 //---------------------------------------------------------------------------
@@ -729,11 +737,11 @@ void rtos_tick_handler(void)
 
     // Fire software timers — only on core 0; g_timer_list is a single global
     // shared across cores and must not be walked concurrently by both SysTick ISRs.
-    extern void rtos_timer_tick(void);
+    extern void rtos_timer_tick(uint32_t now);
 #if RTOS_NUM_CORES > 1
     if (port_core_id() == 0)
 #endif
-        rtos_timer_tick();
+        rtos_timer_tick(G_TICK_COUNT);
 
     port_request_reschedule();
 }
@@ -832,3 +840,79 @@ void rtos_core1_entry(void)
 }
 #endif
 
+// ---------------------------------------------------------------------------
+// Task inspection APIs
+// ---------------------------------------------------------------------------
+
+//---------------------------------------------------------------------------
+// Return the current state of a task.
+//---------------------------------------------------------------------------
+rtos_task_state_t rtos_task_get_state(rtos_handle_t task)
+{
+    const rtos_tcb_t *tcb = (const rtos_tcb_t *)task;
+    if (!tcb) return TASK_DELETED;
+    return tcb->state;
+}
+
+//---------------------------------------------------------------------------
+// Return the name of a task (pointer to the embedded name buffer).
+//---------------------------------------------------------------------------
+const char *rtos_task_get_name(rtos_handle_t task)
+{
+    const rtos_tcb_t *tcb = (const rtos_tcb_t *)task;
+    if (!tcb) return NULL;
+    return tcb->name;
+}
+
+//---------------------------------------------------------------------------
+// Return the current effective priority of a task (may differ from base
+// priority if the task is temporarily boosted by mutex inheritance).
+//---------------------------------------------------------------------------
+uint8_t rtos_task_get_priority(rtos_handle_t task)
+{
+    const rtos_tcb_t *tcb = (const rtos_tcb_t *)task;
+    if (!tcb) return (uint8_t)(RTOS_MAX_PRIORITIES - 1);
+    return tcb->priority;
+}
+
+//---------------------------------------------------------------------------
+// Change a task's priority. If the task is currently READY or RUNNING,
+// it is moved to the correct position in the ready list immediately.
+// The idle-task priority (RTOS_MAX_PRIORITIES - 1) is reserved and
+// cannot be assigned. Pass NULL to target the current task.
+// Returns RTOS_OK on success, RTOS_ERR on invalid argument.
+//---------------------------------------------------------------------------
+int rtos_task_set_priority(rtos_handle_t task, uint8_t new_priority)
+{
+    if (new_priority >= (uint8_t)(RTOS_MAX_PRIORITIES - 1)) return RTOS_ERR;
+
+    rtos_tcb_t *tcb = task ? (rtos_tcb_t *)task : G_CURRENT;
+    if (!tcb) return RTOS_ERR;
+
+    port_enter_critical();
+
+    if (tcb->state == TASK_READY || tcb->state == TASK_RUNNING) {
+        ready_remove(tcb);
+        tcb->priority      = new_priority;
+        tcb->base_priority = new_priority;
+        ready_add(tcb);
+    } else {
+        tcb->priority      = new_priority;
+        tcb->base_priority = new_priority;
+    }
+
+    port_exit_critical();
+    port_request_reschedule();
+    return RTOS_OK;
+}
+
+//---------------------------------------------------------------------------
+// Clear a pending task notification on the calling task without blocking.
+// Use this to discard a stale notification before entering a wait loop.
+//---------------------------------------------------------------------------
+void rtos_task_notify_clear(void)
+{
+    port_enter_critical();
+    G_CURRENT->notif_pending = 0;
+    port_exit_critical();
+}

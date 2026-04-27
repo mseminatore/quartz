@@ -165,20 +165,14 @@ void *port_init_stack(void     *stack_top,
     memset(sp, 0, FRAME_BYTES);
 
     // EPC1 = entry point of the task function.
-    ((uint8_t *)sp)[OFF_EPC1 + 0] = ((uint32_t)func >>  0) & 0xFF;
-    ((uint8_t *)sp)[OFF_EPC1 + 1] = ((uint32_t)func >>  8) & 0xFF;
-    ((uint8_t *)sp)[OFF_EPC1 + 2] = ((uint32_t)func >> 16) & 0xFF;
-    ((uint8_t *)sp)[OFF_EPC1 + 3] = ((uint32_t)func >> 24) & 0xFF;
+    sp[OFF_EPC1 / 4] = (uint32_t)func;
 
     // EPS1 = 0x00000000: INTLEVEL=0 (all interrupts enabled after rfi),
     //                    WOE=0 (Call0 — no window overflow), UM=0 (supervisor).
     // (Already zeroed by memset.)
 
     // a2 = first argument (Call0 ABI).
-    ((uint8_t *)sp)[OFF_A2 + 0] = ((uint32_t)arg >>  0) & 0xFF;
-    ((uint8_t *)sp)[OFF_A2 + 1] = ((uint32_t)arg >>  8) & 0xFF;
-    ((uint8_t *)sp)[OFF_A2 + 2] = ((uint32_t)arg >> 16) & 0xFF;
-    ((uint8_t *)sp)[OFF_A2 + 3] = ((uint32_t)arg >> 24) & 0xFF;
+    sp[OFF_A2 / 4] = (uint32_t)arg;
 
     return sp;
 }

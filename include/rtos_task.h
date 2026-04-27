@@ -118,8 +118,27 @@ void rtos_task_notify_from_isr(rtos_handle_t task);
 int rtos_task_notify_wait(uint32_t timeout_ticks);
 
 // ---------------------------------------------------------------------------
-// Debug / instrumentation APIs
+// Task inspection APIs
 // ---------------------------------------------------------------------------
+
+// Return the current state of a task.
+rtos_task_state_t rtos_task_get_state(rtos_handle_t task);
+
+// Return a pointer to the task's name string (always NUL-terminated).
+const char *rtos_task_get_name(rtos_handle_t task);
+
+// Return the current effective priority (may be temporarily boosted by mutex
+// inheritance; use base_priority field of the TCB for the original value).
+uint8_t rtos_task_get_priority(rtos_handle_t task);
+
+// Change a task's priority. Pass NULL to target the current task.
+// new_priority must be in 0 .. RTOS_MAX_PRIORITIES-2 (idle is reserved).
+// Returns RTOS_OK on success, RTOS_ERR if new_priority is out of range.
+int rtos_task_set_priority(rtos_handle_t task, uint8_t new_priority);
+
+// Clear a pending task notification on the calling task without blocking.
+// Useful for draining a stale notification before a fresh wait loop.
+void rtos_task_notify_clear(void);
 
 // Check whether a task's stack sentinel has been overwritten.
 // Returns RTOS_OK if intact, RTOS_ERR if overflow detected.

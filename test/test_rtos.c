@@ -467,6 +467,7 @@ static void test_timers(void)
 {
     printf("\n--- timers ---\n");
 
+    g_tick_count = 0;
     static rtos_timer_t timer;
     rtos_handle_t h = rtos_timer_create(&timer, "t1", 3, 0 /* one-shot */, timer_cb);
     TEST(h != NULL);
@@ -476,12 +477,12 @@ static void test_timers(void)
     TEST(timer.active == 1);
 
     // Tick twice — not yet fired
-    rtos_timer_tick();
-    rtos_timer_tick();
+    g_tick_count++; rtos_timer_tick(g_tick_count);
+    g_tick_count++; rtos_timer_tick(g_tick_count);
     TEST(g_timer_fires == 0);
 
     // Third tick fires it
-    rtos_timer_tick();
+    g_tick_count++; rtos_timer_tick(g_tick_count);
     TEST(g_timer_fires == 1);
     TEST(timer.active == 0);  // one-shot: removed after firing
 
@@ -490,9 +491,11 @@ static void test_timers(void)
     g_timer_fires = 0;
     rtos_handle_t ph = rtos_timer_create(&ptimer, "p1", 2, 1 /* periodic */, timer_cb);
     rtos_timer_start(ph);
-    rtos_timer_tick(); rtos_timer_tick();  // fires once
+    g_tick_count++; rtos_timer_tick(g_tick_count);
+    g_tick_count++; rtos_timer_tick(g_tick_count);  // fires once
     TEST(g_timer_fires == 1);
-    rtos_timer_tick(); rtos_timer_tick();  // fires again
+    g_tick_count++; rtos_timer_tick(g_tick_count);
+    g_tick_count++; rtos_timer_tick(g_tick_count);  // fires again
     TEST(g_timer_fires == 2);
     TEST(ptimer.active == 1);             // still active
     rtos_timer_stop(ph);
@@ -860,6 +863,188 @@ static void test_queue_recv_from_isr(void)
 }
 
 // ---------------------------------------------------------------------------
+// Test: RTOS_MAX_TIMERS limit is enforced
+// ---------------------------------------------------------------------------
+
+static void test_timer_max_limit(void)
+{
+    printf("\n--- timer max limit ---\n");
+
+    g_tick_count = 0;
+
+    static rtos_timer_t tslot[RTOS_MAX_TIMERS + 1];
+    rtos_handle_t handles[RTOS_MAX_TIMERS + 1];
+
+    // Create RTOS_MAX_TIMERS timers and start them all
+    for (int i = 0; i < RTOS_MAX_TIMERS; i++) {
+        handles[i] = rtos_timer_create(&tslot[i], "tx", 10 + i, 0, timer_cb);
+        rtos_timer_start(handles[i]);
+    }
+
+    // All RTOS_MAX_TIMERS should be active
+    int active = 0;
+    for (int i = 0; i < RTOS_MAX_TIMERS; i++)
+        active += tslot[i].active;
+    TEST(active == RTOS_MAX_TIMERS);
+
+    // One more timer — should not start (limit reached)
+    handles[RTOS_MAX_TIMERS] = rtos_timer_create(&tslot[RTOS_MAX_TIMERS], "overflow", 5, 0, timer_cb);
+    rtos_timer_start(handles[RTOS_MAX_TIMERS]);
+    TEST(tslot[RTOS_MAX_TIMERS].active == 0);  // rejected
+
+    // Stop one; slot should now be available for the overflow timer
+    rtos_timer_stop(handles[0]);
+    TEST(tslot[0].active == 0);
+
+    rtos_timer_start(handles[RTOS_MAX_TIMERS]);
+    TEST(tslot[RTOS_MAX_TIMERS].active == 1);  // now accepted
+
+    // Clean up
+    for (int i = 0; i <= RTOS_MAX_TIMERS; i++)
+        rtos_timer_stop(handles[i]);
+}
+
+// ---------------------------------------------------------------------------
+// Test: rtos_timer_min_remaining and rtos_timer_is_active
+// ---------------------------------------------------------------------------
+
+static void test_timer_min_remaining(void)
+{
+    printf("\n--- timer min_remaining / is_active ---\n");
+
+    g_tick_count = 0;
+
+    TEST(rtos_timer_min_remaining() == RTOS_WAIT_FOREVER);  // no active timers
+
+    static rtos_timer_t ta2, tb2;
+    rtos_handle_t ha2 = rtos_timer_create(&ta2, "a", 10, 0, timer_cb);
+    rtos_handle_t hb2 = rtos_timer_create(&tb2, "b",  5, 0, timer_cb);
+
+    TEST(rtos_timer_is_active(ha2) == 0);
+
+    rtos_timer_start(ha2);
+    TEST(rtos_timer_is_active(ha2) == 1);
+    TEST(rtos_timer_min_remaining() == 10);  // only ta2
+
+    rtos_timer_start(hb2);
+    TEST(rtos_timer_min_remaining() == 5);   // tb2 fires sooner
+
+    // Advance 3 ticks — 2 ticks left for tb2
+    g_tick_count = 3;
+    TEST(rtos_timer_min_remaining() == 2);
+
+    rtos_timer_stop(ha2);
+    rtos_timer_stop(hb2);
+
+    TEST(rtos_timer_min_remaining() == RTOS_WAIT_FOREVER);
+    TEST(rtos_timer_is_active(ha2) == 0);
+}
+
+// ---------------------------------------------------------------------------
+// Test: task inspection and rtos_task_set_priority
+// ---------------------------------------------------------------------------
+
+static void test_task_inspection(void)
+{
+    printf("\n--- task inspection ---\n");
+
+    g_tick_count = 0;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+
+    static rtos_tcb_t inspect_tcb;
+    static uint32_t   inspect_stack[64];
+    rtos_handle_t h = rtos_task_create(&inspect_tcb, inspect_stack, 64,
+                                        (void(*)(void*))1, NULL, "probe", 2);
+    TEST(h != NULL);
+
+    TEST(rtos_task_get_state(h) == TASK_READY);
+    TEST(strcmp(rtos_task_get_name(h), "probe") == 0);
+    TEST(rtos_task_get_priority(h) == 2);
+
+    // Raise priority — task is READY so it must be moved in ready list
+    TEST(RTOS_OK == rtos_task_set_priority(h, 1));
+    TEST(rtos_task_get_priority(h) == 1);
+    TEST(inspect_tcb.base_priority == 1);
+
+    // Reject idle-priority assignment
+    TEST(RTOS_ERR == rtos_task_set_priority(h, RTOS_MAX_PRIORITIES - 1));
+    TEST(rtos_task_get_priority(h) == 1);  // unchanged
+
+    // NULL handle returns sentinel values
+    TEST(rtos_task_get_state(NULL) == TASK_DELETED);
+    TEST(rtos_task_get_name(NULL) == NULL);
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// Test: rtos_task_notify_clear
+// ---------------------------------------------------------------------------
+
+static void test_notify_clear(void)
+{
+    printf("\n--- task notify_clear ---\n");
+
+    static rtos_tcb_t nc_tcb;
+    static uint32_t   nc_stack[64];
+    rtos_handle_t h = rtos_task_create(&nc_tcb, nc_stack, 64,
+                                        (void(*)(void*))1, NULL, "nc", 2);
+    g_current = &nc_tcb;
+    nc_tcb.state = TASK_RUNNING;
+
+    TEST(nc_tcb.notif_pending == 0);
+
+    rtos_task_notify(h);
+    TEST(nc_tcb.notif_pending == 1);
+
+    rtos_task_notify_clear();
+    TEST(nc_tcb.notif_pending == 0);
+
+    // notify_wait should now timeout immediately (no pending notification)
+    nc_tcb.state = TASK_RUNNING;
+    int r = rtos_task_notify_wait(RTOS_NO_WAIT);
+    TEST(r == RTOS_TIMEOUT);
+
+    g_current = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// Test: rtos_semaphore_take_from_isr
+// ---------------------------------------------------------------------------
+
+static void test_sem_take_from_isr(void)
+{
+    printf("\n--- semaphore take from ISR ---\n");
+
+    static rtos_sem_t isem;
+    rtos_handle_t ih = rtos_semaphore_create_counting(&isem, 3, 2);
+    TEST(ih != NULL);
+    TEST(isem.count == 2);
+
+    // Take from ISR — non-blocking
+    TEST(RTOS_OK == rtos_semaphore_take_from_isr(ih));
+    TEST(isem.count == 1);
+
+    TEST(RTOS_OK == rtos_semaphore_take_from_isr(ih));
+    TEST(isem.count == 0);
+
+    // Empty — should return ERR
+    TEST(RTOS_ERR == rtos_semaphore_take_from_isr(ih));
+    TEST(isem.count == 0);  // unchanged
+
+    // Give one back, then take it
+    rtos_semaphore_give_from_isr(ih);
+    TEST(RTOS_OK == rtos_semaphore_take_from_isr(ih));
+    TEST(isem.count == 0);
+
+    // NULL handle
+    TEST(RTOS_ERR == rtos_semaphore_take_from_isr(NULL));
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -886,6 +1071,11 @@ int main(void)
     test_notify_ipc_blocked();
     test_blocked_list_wraparound();
     test_queue_recv_from_isr();
+    test_timer_max_limit();
+    test_timer_min_remaining();
+    test_task_inspection();
+    test_notify_clear();
+    test_sem_take_from_isr();
 
     printf("\n%d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

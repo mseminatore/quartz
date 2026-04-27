@@ -31,4 +31,8 @@ void rtos_semaphore_give(rtos_handle_t sem);
 // ISR-safe Give. Does not reschedule; call port_request_reschedule() after if needed.
 void rtos_semaphore_give_from_isr(rtos_handle_t sem);
 
+// ISR-safe Take. Non-blocking: returns RTOS_OK if a token was taken, RTOS_ERR
+// if the semaphore was empty. Does not reschedule.
+int  rtos_semaphore_take_from_isr(rtos_handle_t sem);
+
 #endif // RTOS_SEM_H

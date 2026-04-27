@@ -18,6 +18,9 @@ cmake_minimum_required(VERSION 3.13)
 # For host unit tests (default, no hardware):
 #   cmake -B build && cmake --build build && ./build/rtos_test
 #
+# For ARM Cortex-M4F (generic bare-metal, e.g. STM32F4xx):
+#   cmake -B build_cm4 -DCMAKE_TOOLCHAIN_FILE=cmake/arm_cm4.cmake
+#
 # As a subdirectory of another CMake project (e.g. a Pico SDK app):
 #   add_subdirectory(deps/rtos)   # Pico SDK must already be initialised
 
@@ -80,6 +83,13 @@ else()
     set(RTOS_TARGET_ESP32S3 OFF)
 endif()
 
+# Detect ARM Cortex-M4 cross-compile (toolchain file sets CMAKE_SYSTEM_PROCESSOR=arm_cm4)
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm_cm4")
+    set(RTOS_TARGET_CM4 ON)
+else()
+    set(RTOS_TARGET_CM4 OFF)
+endif()
+
 # ---------------------------------------------------------------------------
 # RTOS library (architecture-independent kernel sources)
 # ---------------------------------------------------------------------------
@@ -112,6 +122,11 @@ elseif(RTOS_TARGET_ESP32S3)
         port/xtensa_esp32s3/port.c
         port/xtensa_esp32s3/port_asm.S
     )
+elseif(RTOS_TARGET_CM4)
+    set(RTOS_PORT_SOURCES
+        port/arm_cm4/port.c
+        port/arm_cm4/port_asm.S
+    )
 else()
     set(RTOS_PORT_SOURCES "")
 endif()
@@ -136,6 +151,16 @@ if(RTOS_TARGET_PICO)
         set(RTOS_CPU_HZ 125000000)
     endif()
     target_compile_definitions(rtos PRIVATE RTOS_CPU_HZ=${RTOS_CPU_HZ})
+elseif(RTOS_TARGET_CM4)
+    # Allow the parent project to override RTOS_CPU_HZ for specific M4 boards.
+    # Default: 168 MHz (STM32F4xx).  Override e.g. -DRTOS_CPU_HZ=72000000 for STM32F3xx.
+    if(DEFINED RTOS_CPU_HZ)
+        target_compile_definitions(rtos PRIVATE RTOS_CPU_HZ=${RTOS_CPU_HZ})
+    endif()
+    # Allow overriding the BASEPRI critical-section threshold.
+    if(DEFINED RTOS_BASEPRI_VALUE)
+        target_compile_definitions(rtos PRIVATE RTOS_BASEPRI_VALUE=${RTOS_BASEPRI_VALUE})
+    endif()
 endif()
 
 # Pass optional debug/instrumentation overrides from the parent project.
@@ -161,7 +186,7 @@ endforeach()
 # Host-side unit tests (runs on the development machine, no hardware needed)
 # ---------------------------------------------------------------------------
 
-if(NOT RTOS_TARGET_PICO AND NOT RTOS_TARGET_AVR AND NOT RTOS_TARGET_RISCV AND NOT RTOS_TARGET_ESP32S3)
+if(NOT RTOS_TARGET_PICO AND NOT RTOS_TARGET_AVR AND NOT RTOS_TARGET_RISCV AND NOT RTOS_TARGET_ESP32S3 AND NOT RTOS_TARGET_CM4)
     enable_testing()
 
     add_executable(rtos_test test/test_rtos.c)

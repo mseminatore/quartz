@@ -14,6 +14,8 @@ extern rtos_tcb_t **rtos_current_tcb_ptr(void);
 extern void         rtos_task_make_ready(rtos_tcb_t *tcb);
 extern void         rtos_task_blocked_add(rtos_tcb_t *tcb, uint32_t timeout_ticks);
 extern void         rtos_task_blocked_remove(rtos_tcb_t *tcb);
+extern void         ready_add(rtos_tcb_t *tcb);
+extern void         ready_remove(rtos_tcb_t *tcb);
 
 #define current_task() (*rtos_current_tcb_ptr())
 

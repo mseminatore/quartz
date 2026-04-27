@@ -150,3 +150,20 @@ void rtos_semaphore_give_from_isr(rtos_handle_t handle)
     // Caller is responsible for triggering a reschedule via port_request_reschedule()
     // if a higher-priority task was unblocked.
 }
+
+//---------------------------------------------------------------------------
+// Take a semaphore from an ISR. Non-blocking: returns RTOS_OK and decrements
+// the count if a token is available, RTOS_ERR if the semaphore is empty.
+// Does not reschedule; call port_request_reschedule() after if needed.
+//---------------------------------------------------------------------------
+int rtos_semaphore_take_from_isr(rtos_handle_t handle)
+{
+    rtos_sem_t *sem = (rtos_sem_t *)handle;
+    if (!sem) return RTOS_ERR;
+
+    if (sem->count > 0) {
+        sem->count--;
+        return RTOS_OK;
+    }
+    return RTOS_ERR;
+}
