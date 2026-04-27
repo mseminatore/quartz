@@ -3,7 +3,10 @@
 //
 // blink — minimal single-task demo.
 //
-// One task toggles an LED every 500 ms using rtos_task_delay().
+// One task toggles an LED every 500 ms using rtos_task_delay_until() for a
+// drift-free period.  rtos_task_delay_until() accounts for the time spent in
+// the task body so the LED period is always exactly 500 ticks regardless of
+// scheduling jitter or the cost of the GPIO call.
 // On RP2040 it drives GPIO 25 (the on-board LED).
 // On the host build the GPIO calls are stubbed so the file compiles and
 // the task loop runs in simulation.
@@ -44,12 +47,13 @@ static void blink_task(void *arg)
 {
     (void)arg;
     int state = 0;
-    
-    for (;;) 
+    uint32_t last_wake = rtos_task_tick_count();
+
+    for (;;)
     {
         state ^= 1;
         hw_led_set(state);
-        rtos_task_delay(500);   // 500 ticks = 500 ms at 1 kHz
+        rtos_task_delay_until(&last_wake, 500);   // 500 ticks = 500 ms, drift-free
     }
 }
 

@@ -37,10 +37,11 @@ static void producer_task(void *arg)
 {
     (void)arg;
     int value = 0;
+    uint32_t last_wake = rtos_task_tick_count();
     for (;;) {
         rtos_queue_send(g_queue_handle, &value, RTOS_WAIT_FOREVER);
         value++;
-        rtos_task_delay(200);
+        rtos_task_delay_until(&last_wake, 200);   // 200 ms, drift-free send rate
     }
 }
 
