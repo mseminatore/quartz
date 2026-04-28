@@ -10,6 +10,7 @@
 #include "../include/rtos_trace.h"
 #include "list.h"
 #include "port.h"
+#include "compat.h"
 
 //[]---------------------------------------------------------------------------[]
 // Stack sentinel / watermark constants
@@ -22,6 +23,8 @@
 //[]---------------------------------------------------------------------------[]
 // Scheduler state — per-core when RTOS_NUM_CORES > 1
 //[]---------------------------------------------------------------------------[]
+
+_Static_assert(RTOS_MAX_PRIORITIES <= 32, "RTOS_MAX_PRIORITIES must be <= 32 (bitmap is uint32_t)");
 
 #if RTOS_NUM_CORES > 1
 
@@ -91,15 +94,15 @@ static void all_tasks_remove(rtos_tcb_t *tcb)
 // Ports that don't yet implement them will link against these.
 // ---------------------------------------------------------------------------
 
-__attribute__((weak)) void     port_cpu_idle(void)                 { }
-__attribute__((weak)) uint32_t port_suppress_ticks(uint32_t n)     { (void)n; return 0; }
-__attribute__((weak)) uint8_t  port_core_id(void)                  { return 0; }
+RTOS_WEAK void     port_cpu_idle(void)                 { }
+RTOS_WEAK uint32_t port_suppress_ticks(uint32_t n)     { (void)n; return 0; }
+RTOS_WEAK uint8_t  port_core_id(void)                  { return 0; }
 
 // ---------------------------------------------------------------------------
 // Weak overflow hook — spin by default; user may override to log / halt.
 // ---------------------------------------------------------------------------
 
-__attribute__((weak))
+RTOS_WEAK
 void rtos_stack_overflow_hook(rtos_tcb_t *tcb)
 {
     (void)tcb;
@@ -111,10 +114,10 @@ void rtos_stack_overflow_hook(rtos_tcb_t *tcb)
 // ---------------------------------------------------------------------------
 
 #if RTOS_ENABLE_TRACE
-__attribute__((weak)) void rtos_trace_task_switched_in(rtos_tcb_t *t)  { (void)t; }
-__attribute__((weak)) void rtos_trace_task_switched_out(rtos_tcb_t *t) { (void)t; }
-__attribute__((weak)) void rtos_trace_task_create(rtos_tcb_t *t)       { (void)t; }
-__attribute__((weak)) void rtos_trace_task_delete(rtos_tcb_t *t)       { (void)t; }
+RTOS_WEAK void rtos_trace_task_switched_in(rtos_tcb_t *t)  { (void)t; }
+RTOS_WEAK void rtos_trace_task_switched_out(rtos_tcb_t *t) { (void)t; }
+RTOS_WEAK void rtos_trace_task_create(rtos_tcb_t *t)       { (void)t; }
+RTOS_WEAK void rtos_trace_task_delete(rtos_tcb_t *t)       { (void)t; }
 #endif
 
 //[]---------------------------------------------------------------------------[]
@@ -205,8 +208,7 @@ static rtos_tcb_t *scheduler_pick_next(void)
     if (!G_READY_BITMAP) return &g_idle_tcb;
 #endif
 
-    // __builtin_ctz gives index of lowest set bit = highest priority
-    uint8_t prio = (uint8_t)__builtin_ctz(G_READY_BITMAP);
+    uint8_t prio = (uint8_t)rtos_ctz(G_READY_BITMAP);
 
     return G_READY[prio];
 }

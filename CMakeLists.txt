@@ -141,7 +141,11 @@ target_include_directories(rtos PUBLIC
     src          # for internal port.h and list.h
 )
 
-target_compile_options(rtos PRIVATE -fno-builtin)
+if(MSVC)
+    target_compile_options(rtos PRIVATE /W3)
+else()
+    target_compile_options(rtos PRIVATE -fno-builtin)
+endif()
 
 if(RTOS_TARGET_PICO)
     target_link_libraries(rtos pico_stdlib)
@@ -189,9 +193,13 @@ endforeach()
 if(NOT RTOS_TARGET_PICO AND NOT RTOS_TARGET_AVR AND NOT RTOS_TARGET_RISCV AND NOT RTOS_TARGET_ESP32S3 AND NOT RTOS_TARGET_CM4)
     enable_testing()
 
-    add_executable(rtos_test test/test_rtos.c)
-    target_include_directories(rtos_test PRIVATE include src)
-    target_compile_options(rtos_test PRIVATE -fno-builtin)
+    add_executable(rtos_test test/test_rtos.c test/test_main.c)
+    target_include_directories(rtos_test PRIVATE include src test)
+    if(MSVC)
+        target_compile_options(rtos_test PRIVATE /W3)
+    else()
+        target_compile_options(rtos_test PRIVATE -fno-builtin)
+    endif()
 
     add_test(NAME rtos_test COMMAND rtos_test)
 
@@ -204,7 +212,11 @@ if(NOT RTOS_TARGET_PICO AND NOT RTOS_TARGET_AVR AND NOT RTOS_TARGET_RISCV AND NO
                        ${RTOS_KERNEL_SOURCES}
                        port/host/port.c)
         target_include_directories(sample_${sample} PRIVATE include src)
-        target_compile_options(sample_${sample} PRIVATE -fno-builtin)
+        if(MSVC)
+            target_compile_options(sample_${sample} PRIVATE /W3)
+        else()
+            target_compile_options(sample_${sample} PRIVATE -fno-builtin)
+        endif()
         if(sample STREQUAL "adc_pipeline")
             target_link_libraries(sample_${sample} m)  # sinf for host stub
         endif()

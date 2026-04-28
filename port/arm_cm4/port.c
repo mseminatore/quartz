@@ -58,13 +58,20 @@
 // Critical sections (BASEPRI-based — M4/M3/M7 only, not available on M0/M0+)
 //
 // port_enter_critical: raise BASEPRI to mask RTOS-aware interrupts.
-// port_exit_critical:  restore BASEPRI to 0 (unmask all).
+// port_exit_critical:  restore BASEPRI to the previously saved value.
 //
-// Nesting is NOT tracked; critical sections must not be nested.
+// Nesting is tracked: enter saves the previous BASEPRI value on a stack and
+// exit restores it, so nested critical sections work correctly.
 // ---------------------------------------------------------------------------
+
+static uint32_t g_basepri_stack[8];
+static uint32_t g_critical_nesting = 0;
 
 void port_enter_critical(void)
 {
+    uint32_t prev;
+    __asm volatile ("mrs %0, basepri" : "=r"(prev));
+
     const uint32_t val = RTOS_BASEPRI_VALUE;
     __asm volatile (
         "msr basepri, %0  \n"
@@ -72,14 +79,24 @@ void port_enter_critical(void)
         "isb              \n"
         :: "r"(val) : "memory"
     );
+
+    if (g_critical_nesting < sizeof(g_basepri_stack) / sizeof(g_basepri_stack[0]))
+        g_basepri_stack[g_critical_nesting] = prev;
+    g_critical_nesting++;
 }
 
 void port_exit_critical(void)
 {
-    const uint32_t val = 0u;
+    if (g_critical_nesting == 0) return;
+    g_critical_nesting--;
+
+    uint32_t restore = 0;
+    if (g_critical_nesting < sizeof(g_basepri_stack) / sizeof(g_basepri_stack[0]))
+        restore = g_basepri_stack[g_critical_nesting];
+
     __asm volatile (
         "msr basepri, %0  \n"
-        :: "r"(val) : "memory"
+        :: "r"(restore) : "memory"
     );
 }
 

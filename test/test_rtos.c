@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <assert.h>
+#include "test.h"
 
 // ---------------------------------------------------------------------------
 // Stub the port layer so the kernel compiles and links on the host.
@@ -41,24 +42,12 @@ void *port_init_stack(void     *stack_top,
 #include "../src/timer.c"
 
 // ---------------------------------------------------------------------------
-// Minimal test harness
-// ---------------------------------------------------------------------------
-
-static int g_pass = 0;
-static int g_fail = 0;
-
-#define TEST(expr) do { \
-    if (expr) { g_pass++; printf("  PASS: %s\n", #expr); } \
-    else      { g_fail++; printf("  FAIL: %s  [line %d]\n", #expr, __LINE__); } \
-} while(0)
-
-// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 static void test_list(void)
 {
-    printf("\n--- list ---\n");
+    SUITE("list basics");
 
     rtos_tcb_t a = {0}, b = {0}, c = {0};
     rtos_tcb_t *head = NULL;
@@ -85,7 +74,7 @@ static void test_list(void)
 
 static void test_task_create(void)
 {
-    printf("\n--- xTaskCreate ---\n");
+    SUITE("task create");
 
     static rtos_tcb_t tcb;
     static uint32_t   stack[64];
@@ -108,7 +97,7 @@ static void test_task_create(void)
 
 static void test_semaphore(void)
 {
-    printf("\n--- semaphore ---\n");
+    SUITE("semaphore basics");
 
     static rtos_sem_t sem;
     rtos_handle_t h = rtos_semaphore_create_binary(&sem);
@@ -137,7 +126,7 @@ static void test_semaphore(void)
 
 static void test_mutex(void)
 {
-    printf("\n--- mutex ---\n");
+    SUITE("mutex basics");
 
     // Set up a fake "current task" so the mutex owner is non-NULL
     static rtos_tcb_t fake_task;
@@ -164,7 +153,7 @@ static void test_mutex(void)
 
 static void test_queue(void)
 {
-    printf("\n--- queue ---\n");
+    SUITE("queue basics");
 
     static rtos_queue_t q;
     static uint8_t      buf[4 * sizeof(int)];
@@ -197,7 +186,7 @@ static void test_queue(void)
 
 static void test_list_sorted(void)
 {
-    printf("\n--- list_insert_sorted ---\n");
+    SUITE("list insert sorted");
 
     static rtos_tcb_t a, b, c, d;
     a.sort_key = 10; b.sort_key = 5; c.sort_key = 20; d.sort_key = 5;
@@ -218,7 +207,7 @@ static void test_list_sorted(void)
 
 static void test_task_notify(void)
 {
-    printf("\n--- task notifications ---\n");
+    SUITE("task notifications");
 
     static rtos_tcb_t tcb;
     static uint32_t stack[64];
@@ -253,7 +242,7 @@ static void test_task_notify(void)
 
 static void test_delay_until(void)
 {
-    printf("\n--- rtos_task_delay_until ---\n");
+    SUITE("delay until");
 
     static rtos_tcb_t tcb;
     static uint32_t stack[64];
@@ -291,7 +280,7 @@ static void timer_cb(rtos_handle_t t) { (void)t; g_timer_fires++; }
 
 static void test_ok_tick_handler(void)
 {
-    printf("\n--- O(k) tick handler ---\n");
+    SUITE("O(k) tick handler");
 
     // Reset scheduler state for a clean test
     g_blocked = NULL;
@@ -346,7 +335,7 @@ static void test_ok_tick_handler(void)
 
 static void test_ipc_timeout(void)
 {
-    printf("\n--- IPC timeout via tick handler ---\n");
+    SUITE("IPC timeout via tick handler");
 
     g_blocked = NULL;
     g_tick_count = 0;
@@ -406,7 +395,7 @@ static void test_ipc_timeout(void)
 
 static void test_priority_inheritance(void)
 {
-    printf("\n--- priority inheritance ---\n");
+    SUITE("priority inheritance");
 
     g_blocked = NULL;
     g_tick_count = 0;
@@ -465,7 +454,7 @@ static void test_priority_inheritance(void)
 
 static void test_timers(void)
 {
-    printf("\n--- timers ---\n");
+    SUITE("timers");
 
     g_tick_count = 0;
     static rtos_timer_t timer;
@@ -508,7 +497,7 @@ static void test_timers(void)
 
 static void test_tick_wraparound(void)
 {
-    printf("\n--- tick wraparound ---\n");
+    SUITE("tick wraparound");
 
     static rtos_tcb_t tw;
     static uint32_t   sw[64];
@@ -556,7 +545,7 @@ static void test_tick_wraparound(void)
 
 static void test_queue_blocking_send(void)
 {
-    printf("\n--- queue blocking send ---\n");
+    SUITE("queue blocking send");
 
     static rtos_queue_t q;
     static int   buf[2];
@@ -615,7 +604,7 @@ static void test_queue_blocking_send(void)
 
 static void test_ipc_suspend_cleanup(void)
 {
-    printf("\n--- ipc suspend cleanup ---\n");
+    SUITE("ipc suspend cleanup");
 
     static rtos_sem_t   sem;
     static rtos_tcb_t   ta, tb;
@@ -667,7 +656,7 @@ static void test_ipc_suspend_cleanup(void)
 
 static void test_notify_wait_forever(void)
 {
-    printf("\n--- notify_wait WAIT_FOREVER stays blocked ---\n");
+    SUITE("notify_wait WAIT_FOREVER stays blocked");
 
     static rtos_tcb_t ta;
     static uint32_t sa[64];
@@ -715,7 +704,7 @@ static void test_notify_wait_forever(void)
 
 static void test_notify_ipc_blocked(void)
 {
-    printf("\n--- notify on IPC-blocked task cleans ipc_wait ---\n");
+    SUITE("notify on IPC-blocked task cleans ipc_wait");
 
     static rtos_sem_t   sem;
     static rtos_tcb_t   ta, tb;
@@ -763,7 +752,7 @@ static void test_notify_ipc_blocked(void)
 
 static void test_blocked_list_wraparound(void)
 {
-    printf("\n--- blocked list signed sort across tick wraparound ---\n");
+    SUITE("blocked list signed sort across tick wraparound");
 
     static rtos_tcb_t t1, t2;
     static uint32_t s1[64], s2[64];
@@ -822,7 +811,7 @@ static void test_blocked_list_wraparound(void)
 
 static void test_queue_recv_from_isr(void)
 {
-    printf("\n--- queue receive from ISR ---\n");
+    SUITE("queue receive from ISR");
 
     static rtos_queue_t q;
     static int buf[4];
@@ -868,7 +857,7 @@ static void test_queue_recv_from_isr(void)
 
 static void test_timer_max_limit(void)
 {
-    printf("\n--- timer max limit ---\n");
+    SUITE("timer max limit");
 
     g_tick_count = 0;
 
@@ -910,7 +899,7 @@ static void test_timer_max_limit(void)
 
 static void test_timer_min_remaining(void)
 {
-    printf("\n--- timer min_remaining / is_active ---\n");
+    SUITE("timer min_remaining / is_active");
 
     g_tick_count = 0;
 
@@ -946,7 +935,7 @@ static void test_timer_min_remaining(void)
 
 static void test_task_inspection(void)
 {
-    printf("\n--- task inspection ---\n");
+    SUITE("task inspection");
 
     g_tick_count = 0;
     g_ready_bitmap = 0;
@@ -986,7 +975,7 @@ static void test_task_inspection(void)
 
 static void test_notify_clear(void)
 {
-    printf("\n--- task notify_clear ---\n");
+    SUITE("task notify_clear");
 
     static rtos_tcb_t nc_tcb;
     static uint32_t   nc_stack[64];
@@ -1017,7 +1006,7 @@ static void test_notify_clear(void)
 
 static void test_sem_take_from_isr(void)
 {
-    printf("\n--- semaphore take from ISR ---\n");
+    SUITE("semaphore take from ISR");
 
     static rtos_sem_t isem;
     rtos_handle_t ih = rtos_semaphore_create_counting(&isem, 3, 2);
@@ -1045,12 +1034,805 @@ static void test_sem_take_from_isr(void)
 }
 
 // ---------------------------------------------------------------------------
+// TEST-1: rtos_task_delete
+// ---------------------------------------------------------------------------
+
+static void test_task_delete(void)
+{
+    SUITE("task delete");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_tcb_t td;
+    static uint32_t   sd[64];
+    rtos_handle_t h = rtos_task_create(&td, sd, 64, (void(*)(void*))1, NULL, "del", 2);
+    TEST(h != NULL);
+    TEST(td.state == TASK_READY);
+    TEST(g_ready[2] == &td);
+
+    // Delete the task — should remove from ready list and mark DELETED
+    rtos_task_delete(h);
+    TEST(td.state == TASK_DELETED);
+    TEST(g_ready[2] == NULL);
+    TEST((g_ready_bitmap & (1u << 2)) == 0);
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// TEST-1b: rtos_task_delete on blocked task (IPC cleanup)
+// ---------------------------------------------------------------------------
+
+static void test_task_delete_while_blocked(void)
+{
+    SUITE("task delete while IPC-blocked");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_tcb_t td2, tother;
+    static uint32_t   sd2[64], sother[64];
+    static rtos_sem_t sem_del;
+
+    rtos_task_create(&td2, sd2, 64, (void(*)(void*))1, NULL, "dblk", 2);
+    rtos_task_create(&tother, sother, 64, (void(*)(void*))1, NULL, "other", 3);
+    rtos_handle_t sh = rtos_semaphore_create_binary(&sem_del);
+
+    // Manually block td2 on semaphore and blocked list
+    g_current = &tother;
+    tother.state = TASK_RUNNING;
+
+    td2.state    = TASK_BLOCKED;
+    td2.ipc_wait = &sem_del.wait_list;
+    list_insert_sorted(&sem_del.wait_list, &td2, td2.priority);
+    rtos_task_blocked_add(&td2, 100);
+    TEST(sem_del.wait_list == &td2);
+    TEST(td2.on_blocked == 1);
+
+    // Delete td2 — must remove from both IPC wait list and blocked list
+    rtos_task_delete((rtos_handle_t)&td2);
+    TEST(td2.state == TASK_DELETED);
+    TEST(sem_del.wait_list == NULL);
+    TEST(td2.on_blocked == 0);
+
+    g_current = NULL;
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// TEST-2: rtos_task_suspend / resume standalone
+// ---------------------------------------------------------------------------
+
+static void test_suspend_resume(void)
+{
+    SUITE("task suspend and resume");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_tcb_t ts;
+    static uint32_t   ss[64];
+    rtos_handle_t h = rtos_task_create(&ts, ss, 64, (void(*)(void*))1, NULL, "susp", 1);
+    TEST(h != NULL);
+    TEST(ts.state == TASK_READY);
+    TEST(g_ready[1] == &ts);
+
+    // Suspend the task
+    rtos_task_suspend(h);
+    TEST(ts.state == TASK_SUSPENDED);
+    TEST(g_ready[1] == NULL);
+    TEST((g_ready_bitmap & (1u << 1)) == 0);
+
+    // Resume the task
+    rtos_task_resume(h);
+    TEST(ts.state == TASK_READY);
+    TEST(g_ready[1] == &ts);
+    TEST((g_ready_bitmap & (1u << 1)) != 0);
+
+    // Suspend self (via NULL handle)
+    g_current = &ts;
+    ts.state = TASK_RUNNING;
+    // Remove from ready list first since RUNNING tasks aren't on it
+    ready_remove(&ts);
+    rtos_task_suspend(NULL);
+    TEST(ts.state == TASK_SUSPENDED);
+
+    // Resume
+    rtos_task_resume(h);
+    TEST(ts.state == TASK_READY);
+
+    g_current = NULL;
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// TEST-3: rtos_task_yield
+// ---------------------------------------------------------------------------
+
+static void test_task_yield(void)
+{
+    SUITE("task yield");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+
+    static rtos_tcb_t ty;
+    static uint32_t   sy[64];
+    rtos_task_create(&ty, sy, 64, (void(*)(void*))1, NULL, "yield", 1);
+    g_current = &ty;
+    ty.state = TASK_RUNNING;
+
+    // yield is a no-op on the host stub but should not crash
+    rtos_task_yield();
+    TEST(ty.state == TASK_RUNNING);  // state unchanged
+
+    g_current = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// TEST-4: rtos_timer_reset
+// ---------------------------------------------------------------------------
+
+static void test_timer_reset(void)
+{
+    SUITE("timer reset");
+
+    g_tick_count = 0;
+    g_timer_fires = 0;
+
+    static rtos_timer_t trst;
+    rtos_handle_t th = rtos_timer_create(&trst, "rst", 10, 0, timer_cb);
+    rtos_timer_start(th);
+    TEST(trst.active == 1);
+
+    // Advance 5 ticks
+    for (int i = 0; i < 5; i++) { g_tick_count++; rtos_timer_tick(g_tick_count); }
+    TEST(g_timer_fires == 0);
+
+    // Reset the timer — should restart the 10-tick countdown from now
+    rtos_timer_reset(th);
+    TEST(trst.active == 1);
+
+    // Advance 9 more ticks — should NOT fire (reset extended the deadline)
+    for (int i = 0; i < 9; i++) { g_tick_count++; rtos_timer_tick(g_tick_count); }
+    TEST(g_timer_fires == 0);
+
+    // One more tick — should fire now
+    g_tick_count++;
+    rtos_timer_tick(g_tick_count);
+    TEST(g_timer_fires == 1);
+
+    rtos_timer_stop(th);
+}
+
+// ---------------------------------------------------------------------------
+// TEST-5: rtos_task_check_stack
+// ---------------------------------------------------------------------------
+
+static void test_check_stack(void)
+{
+    SUITE("task check stack");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+
+    static rtos_tcb_t tcs;
+    static uint32_t   scs[64];
+    rtos_handle_t h = rtos_task_create(&tcs, scs, 64, (void(*)(void*))1, NULL, "stk", 2);
+    TEST(h != NULL);
+
+    // Stack sentinel should be intact
+    TEST(RTOS_OK == rtos_task_check_stack(h));
+
+    // Corrupt the sentinel
+    uint32_t *base = (uint32_t *)tcs.stack_base;
+    base[0] = 0;
+    TEST(RTOS_ERR == rtos_task_check_stack(h));
+
+    // Restore it
+    base[0] = 0xDEADBEEFu;
+    TEST(RTOS_OK == rtos_task_check_stack(h));
+
+    // NULL handle
+    TEST(RTOS_ERR == rtos_task_check_stack(NULL));
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// TEST-6: rtos_task_stack_high_water_mark
+// ---------------------------------------------------------------------------
+
+static void test_stack_hwm(void)
+{
+    SUITE("task stack high water mark");
+
+    // RTOS_STACK_WATERMARK is 0 by default, so HWM always returns 0
+    static rtos_tcb_t thwm;
+    static uint32_t   shwm[64];
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+
+    rtos_handle_t h = rtos_task_create(&thwm, shwm, 64, (void(*)(void*))1, NULL, "hwm", 2);
+    TEST(h != NULL);
+
+    // With watermark disabled, should return 0
+    TEST(rtos_task_stack_high_water_mark(h) == 0);
+    TEST(rtos_task_stack_high_water_mark(NULL) == 0);
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// TEST-7: rtos_queue_send_from_isr direct assertions
+// ---------------------------------------------------------------------------
+
+static void test_queue_send_isr_direct(void)
+{
+    SUITE("queue send from ISR direct");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_queue_t qi;
+    static int buf_qi[2];
+    rtos_handle_t qh = rtos_queue_create(&qi, buf_qi, sizeof(int), 2);
+    TEST(qh != NULL);
+
+    int v1 = 10, v2 = 20, v3 = 30;
+    TEST(RTOS_OK == rtos_queue_send_from_isr(qh, &v1));
+    TEST(rtos_queue_messages_waiting(qh) == 1);
+    TEST(RTOS_OK == rtos_queue_send_from_isr(qh, &v2));
+    TEST(rtos_queue_messages_waiting(qh) == 2);
+
+    // Queue full — should return RTOS_ERR
+    TEST(RTOS_ERR == rtos_queue_send_from_isr(qh, &v3));
+    TEST(rtos_queue_messages_waiting(qh) == 2);
+
+    // NULL handle
+    TEST(RTOS_ERR == rtos_queue_send_from_isr(NULL, &v1));
+
+    g_blocked = NULL;
+    g_tick_count = 0;
+}
+
+// ---------------------------------------------------------------------------
+// TEST-8: rtos_context_switch logic
+// ---------------------------------------------------------------------------
+
+static void test_context_switch(void)
+{
+    SUITE("context switch logic");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_tcb_t t_high, t_low;
+    static uint32_t   s_high[64], s_low[64];
+
+    rtos_task_create(&t_high, s_high, 64, (void(*)(void*))1, NULL, "hi", 0);
+    rtos_task_create(&t_low, s_low, 64, (void(*)(void*))1, NULL, "lo", 3);
+
+    // Make t_low the current running task
+    g_current = &t_low;
+    t_low.state = TASK_RUNNING;
+    ready_remove(&t_low);
+
+    // Context switch should preempt t_low and pick t_high
+    rtos_context_switch();
+    TEST(g_current == &t_high);
+    TEST(t_high.state == TASK_RUNNING);
+    TEST(t_low.state == TASK_READY);  // preempted → back on ready list
+
+    // t_low should be back on its ready queue
+    TEST(g_ready[3] == &t_low);
+
+    // Another context switch — t_high goes back on ready list and gets picked
+    // again because it has higher priority than t_low
+    rtos_context_switch();
+    TEST(g_current == &t_high);  // still highest priority
+    TEST(t_high.state == TASK_RUNNING);
+
+    // Remove t_high from the equation, then switch should pick t_low
+    t_high.state = TASK_BLOCKED;
+    rtos_context_switch();
+    TEST(g_current == &t_low);
+    TEST(t_low.state == TASK_RUNNING);
+
+    g_current = NULL;
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// TEST-9: rtos_task_delay(0) yields without blocking
+// ---------------------------------------------------------------------------
+
+static void test_delay_zero(void)
+{
+    SUITE("task delay(0) yields");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_tcb_t td0;
+    static uint32_t   sd0[64];
+    rtos_task_create(&td0, sd0, 64, (void(*)(void*))1, NULL, "d0", 1);
+    g_current = &td0;
+    td0.state = TASK_RUNNING;
+
+    rtos_task_delay(0);
+
+    // Should NOT be blocked — delay(0) is a yield, not a block
+    TEST(td0.state == TASK_RUNNING);  // unchanged — yield just calls port_request_reschedule
+    TEST(g_blocked == NULL);
+
+    g_current = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// TEST-10: task name truncation at RTOS_TASK_NAME_LEN
+// ---------------------------------------------------------------------------
+
+static void test_name_truncation(void)
+{
+    SUITE("task name truncation");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+
+    static rtos_tcb_t tn;
+    static uint32_t   sn[64];
+
+    // Name longer than RTOS_TASK_NAME_LEN (16 including null)
+    const char *long_name = "this_name_is_way_too_long_for_the_buffer";
+    rtos_handle_t h = rtos_task_create(&tn, sn, 64, (void(*)(void*))1, NULL, long_name, 2);
+    TEST(h != NULL);
+
+    // Should be truncated to RTOS_TASK_NAME_LEN - 1 chars + null
+    TEST(strlen(rtos_task_get_name(h)) == RTOS_TASK_NAME_LEN - 1);
+    TEST(strncmp(rtos_task_get_name(h), long_name, RTOS_TASK_NAME_LEN - 1) == 0);
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// TEST-11: rtos_task_set_priority on blocked/suspended tasks
+// ---------------------------------------------------------------------------
+
+static void test_setprio_blocked(void)
+{
+    SUITE("set priority on blocked/suspended task");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_tcb_t tsp, tother2;
+    static uint32_t   ssp[64], sother2[64];
+
+    rtos_task_create(&tsp, ssp, 64, (void(*)(void*))1, NULL, "sp", 2);
+    rtos_task_create(&tother2, sother2, 64, (void(*)(void*))1, NULL, "ot2", 3);
+
+    // Suspend the task, then change priority
+    rtos_task_suspend((rtos_handle_t)&tsp);
+    TEST(tsp.state == TASK_SUSPENDED);
+    TEST(RTOS_OK == rtos_task_set_priority((rtos_handle_t)&tsp, 0));
+    TEST(tsp.priority == 0);
+    TEST(tsp.base_priority == 0);
+
+    // Resume — should be on the new priority queue
+    rtos_task_resume((rtos_handle_t)&tsp);
+    TEST(tsp.state == TASK_READY);
+    TEST(g_ready[0] == &tsp);
+
+    // Block the task, then change priority
+    g_current = &tother2;
+    tother2.state = TASK_RUNNING;
+    ready_remove(&tother2);
+
+    tsp.state = TASK_BLOCKED;
+    ready_remove(&tsp);
+    rtos_task_blocked_add(&tsp, 100);
+
+    TEST(RTOS_OK == rtos_task_set_priority((rtos_handle_t)&tsp, 1));
+    TEST(tsp.priority == 1);
+    TEST(tsp.base_priority == 1);
+
+    g_current = NULL;
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// TEST-12: notification + IPC interaction (BUG-1 scenario)
+// ---------------------------------------------------------------------------
+
+static void test_notify_ipc_interaction(void)
+{
+    SUITE("notification + IPC interaction (BUG-1)");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_sem_t   sem_ni;
+    static rtos_tcb_t   ta_ni, tb_ni;
+    static uint32_t     sa_ni[64], sb_ni[64];
+
+    rtos_task_create(&ta_ni, sa_ni, 64, (void(*)(void*))1, NULL, "ta_ni", 1);
+    rtos_task_create(&tb_ni, sb_ni, 64, (void(*)(void*))1, NULL, "tb_ni", 2);
+    rtos_handle_t sh = rtos_semaphore_create_binary(&sem_ni);
+
+    // Simulate ta_ni calling rtos_semaphore_take and blocking
+    g_current = &ta_ni;
+    ta_ni.state    = TASK_BLOCKED;
+    ta_ni.ipc_wait = &sem_ni.wait_list;
+    ta_ni.notif_pending = 0;
+    list_insert_sorted(&sem_ni.wait_list, &ta_ni, ta_ni.priority);
+    rtos_task_blocked_add(&ta_ni, 100);
+
+    // tb_ni sends a notification to ta_ni while it's IPC-blocked
+    g_current = &tb_ni;
+    tb_ni.state = TASK_RUNNING;
+    rtos_task_notify((rtos_handle_t)&ta_ni);
+
+    // ta_ni should be woken up with notif_pending set
+    TEST(ta_ni.state == TASK_READY);
+    TEST(ta_ni.notif_pending == 1);
+    TEST(sem_ni.wait_list == NULL);  // cleaned up
+    TEST(sem_ni.count == 0);          // semaphore NOT given — count should remain 0
+
+    g_current = NULL;
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// TEST-13: double notification before wait
+// ---------------------------------------------------------------------------
+
+static void test_double_notify(void)
+{
+    SUITE("double notification coalesce");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_tcb_t tdn;
+    static uint32_t   sdn[64];
+    rtos_task_create(&tdn, sdn, 64, (void(*)(void*))1, NULL, "dn", 1);
+    g_current = &tdn;
+    tdn.state = TASK_RUNNING;
+
+    // Notify twice before wait
+    rtos_task_notify((rtos_handle_t)&tdn);
+    TEST(tdn.notif_pending == 1);
+    rtos_task_notify((rtos_handle_t)&tdn);
+    TEST(tdn.notif_pending == 1);  // coalesced, still 1
+
+    // First wait succeeds
+    int r = rtos_task_notify_wait(RTOS_NO_WAIT);
+    TEST(r == RTOS_OK);
+    TEST(tdn.notif_pending == 0);
+
+    // Second wait times out — second notification was coalesced/lost
+    tdn.state = TASK_RUNNING;
+    r = rtos_task_notify_wait(RTOS_NO_WAIT);
+    TEST(r == RTOS_TIMEOUT);
+
+    g_current = NULL;
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// TEST-14: mutex non-owner unlock returns error
+// ---------------------------------------------------------------------------
+
+static void test_mutex_non_owner(void)
+{
+    SUITE("mutex non-owner unlock");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_mutex_t mno;
+    static rtos_tcb_t   t_owner, t_thief;
+    static uint32_t     s_owner[64], s_thief[64];
+
+    rtos_task_create(&t_owner, s_owner, 64, (void(*)(void*))1, NULL, "own", 1);
+    rtos_task_create(&t_thief, s_thief, 64, (void(*)(void*))1, NULL, "thf", 2);
+    rtos_handle_t mh = rtos_mutex_create(&mno);
+
+    // Owner locks the mutex
+    g_current = &t_owner;
+    t_owner.state = TASK_RUNNING;
+    TEST(RTOS_OK == rtos_mutex_lock(mh, RTOS_NO_WAIT));
+    TEST(mno.owner == &t_owner);
+
+    // Non-owner tries to unlock — should fail
+    g_current = &t_thief;
+    t_thief.state = TASK_RUNNING;
+    TEST(RTOS_ERR == rtos_mutex_unlock(mh));
+    TEST(mno.owner == &t_owner);  // ownership unchanged
+
+    // Owner unlocks — should succeed
+    g_current = &t_owner;
+    TEST(RTOS_OK == rtos_mutex_unlock(mh));
+    TEST(mno.owner == NULL);
+
+    g_current = NULL;
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// TEST-15: timer stop from within callback
+// ---------------------------------------------------------------------------
+
+static rtos_handle_t g_self_stop_handle;
+
+static void timer_self_stop_cb(void *arg)
+{
+    (void)arg;
+    g_timer_fires++;
+    rtos_timer_stop(g_self_stop_handle);
+}
+
+static void test_timer_stop_from_callback(void)
+{
+    SUITE("timer stop from callback");
+
+    g_tick_count = 0;
+    g_timer_fires = 0;
+
+    static rtos_timer_t tss;
+    g_self_stop_handle = rtos_timer_create(&tss, "ss", 5, 1, timer_self_stop_cb);
+    rtos_timer_start(g_self_stop_handle);
+    TEST(tss.active == 1);
+
+    // Advance 5 ticks — should fire and stop itself
+    for (int i = 0; i < 5; i++) { g_tick_count++; rtos_timer_tick(g_tick_count); }
+    TEST(g_timer_fires == 1);
+    TEST(tss.active == 0);  // stopped itself in callback
+
+    // Advance more — should NOT fire again
+    for (int i = 0; i < 10; i++) { g_tick_count++; rtos_timer_tick(g_tick_count); }
+    TEST(g_timer_fires == 1);  // still 1
+}
+
+// ---------------------------------------------------------------------------
+// TEST-16: rtos_idle_next_wakeup_ticks
+// ---------------------------------------------------------------------------
+
+static void test_idle_wakeup_ticks(void)
+{
+    SUITE("idle next wakeup ticks");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    // No blocked tasks, no timers → WAIT_FOREVER
+    TEST(rtos_idle_next_wakeup_ticks() == RTOS_WAIT_FOREVER);
+
+    // Add a blocked task with wakeup at tick 10
+    static rtos_tcb_t tiw;
+    static uint32_t   siw[64];
+    rtos_task_create(&tiw, siw, 64, (void(*)(void*))1, NULL, "iw", 1);
+    tiw.state = TASK_BLOCKED;
+    ready_remove(&tiw);
+    rtos_task_blocked_add(&tiw, 10);
+
+    TEST(rtos_idle_next_wakeup_ticks() == 10);
+
+    // Advance 3 ticks
+    g_tick_count = 3;
+    TEST(rtos_idle_next_wakeup_ticks() == 7);
+
+    // Clean up
+    rtos_task_blocked_remove(&tiw);
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+}
+
+// ---------------------------------------------------------------------------
+// TEST-17: ISR queue ops with waiters
+// ---------------------------------------------------------------------------
+
+static void test_isr_queue_with_waiters(void)
+{
+    SUITE("ISR queue ops unblock waiters");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_queue_t qw;
+    static int          buf_qw[2];
+    static rtos_tcb_t   t_recv, t_send, t_isr;
+    static uint32_t     s_recv[64], s_send[64], s_isr[64];
+
+    rtos_handle_t qh = rtos_queue_create(&qw, buf_qw, sizeof(int), 2);
+    rtos_task_create(&t_recv, s_recv, 64, (void(*)(void*))1, NULL, "rcv", 1);
+    rtos_task_create(&t_send, s_send, 64, (void(*)(void*))1, NULL, "snd", 2);
+    rtos_task_create(&t_isr, s_isr, 64, (void(*)(void*))1, NULL, "isr", 0);
+
+    // Block t_recv on empty queue receive
+    t_recv.state = TASK_BLOCKED;
+    t_recv.ipc_wait = &qw.recv_wait;
+    list_insert_sorted(&qw.recv_wait, &t_recv, t_recv.priority);
+    ready_remove(&t_recv);
+    TEST(qw.recv_wait == &t_recv);
+
+    // ISR sends an item — should unblock t_recv
+    int val = 42;
+    TEST(RTOS_OK == rtos_queue_send_from_isr(qh, &val));
+    TEST(t_recv.state == TASK_READY);
+    TEST(qw.recv_wait == NULL);
+
+    // Now fill the queue and block t_send on full queue send
+    int v1 = 1, v2 = 2;
+    rtos_queue_send_from_isr(qh, &v1);
+    rtos_queue_send_from_isr(qh, &v2);
+    TEST(rtos_queue_messages_waiting(qh) == 2);
+
+    t_send.state = TASK_BLOCKED;
+    t_send.ipc_wait = &qw.send_wait;
+    list_insert_sorted(&qw.send_wait, &t_send, t_send.priority);
+    ready_remove(&t_send);
+    TEST(qw.send_wait == &t_send);
+
+    // ISR receives — should unblock t_send
+    int got;
+    TEST(RTOS_OK == rtos_queue_receive_from_isr(qh, &got));
+    TEST(t_send.state == TASK_READY);
+    TEST(qw.send_wait == NULL);
+
+    g_current = NULL;
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+}
+
+// ---------------------------------------------------------------------------
+// TEST-18: creating maximum tasks (tracking limit)
+// ---------------------------------------------------------------------------
+
+static void test_max_tasks(void)
+{
+    SUITE("max tasks tracking limit");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+    g_all_tasks_count = 0;
+
+    static rtos_tcb_t  tcbs[RTOS_MAX_TASKS + 1];
+    static uint32_t    stacks[RTOS_MAX_TASKS + 1][64];
+
+    // Create RTOS_MAX_TASKS tasks — all should succeed
+    for (int i = 0; i < RTOS_MAX_TASKS; i++) {
+        rtos_handle_t h = rtos_task_create(&tcbs[i], stacks[i], 64,
+                                           (void(*)(void*))1, NULL, "mx", i % (RTOS_MAX_PRIORITIES - 1));
+        TEST(h != NULL);
+    }
+    TEST(g_all_tasks_count == RTOS_MAX_TASKS);
+
+    // One more — task still gets created but tracking array is full
+    rtos_handle_t extra = rtos_task_create(&tcbs[RTOS_MAX_TASKS], stacks[RTOS_MAX_TASKS], 64,
+                                            (void(*)(void*))1, NULL, "xtra", 0);
+    TEST(extra != NULL);  // task creation succeeds
+    TEST(g_all_tasks_count == RTOS_MAX_TASKS);  // but not tracked
+
+    g_all_tasks_count = 0;
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// TEST-19: semaphore give_from_isr with waiter
+// ---------------------------------------------------------------------------
+
+static void test_sem_give_isr_waiter(void)
+{
+    SUITE("semaphore give_from_isr unblocks waiter");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_sem_t  sem_isr;
+    static rtos_tcb_t  tw, tisr2;
+    static uint32_t    sw[64], sisr2[64];
+
+    rtos_handle_t sh = rtos_semaphore_create_binary(&sem_isr);
+    rtos_task_create(&tw, sw, 64, (void(*)(void*))1, NULL, "sw", 1);
+    rtos_task_create(&tisr2, sisr2, 64, (void(*)(void*))1, NULL, "isr2", 0);
+
+    // Block tw on semaphore
+    tw.state = TASK_BLOCKED;
+    tw.ipc_wait = &sem_isr.wait_list;
+    list_insert_sorted(&sem_isr.wait_list, &tw, tw.priority);
+    ready_remove(&tw);
+    TEST(sem_isr.wait_list == &tw);
+
+    // ISR gives the semaphore — should unblock tw, NOT increment count
+    rtos_semaphore_give_from_isr(sh);
+    TEST(tw.state == TASK_READY);
+    TEST(sem_isr.wait_list == NULL);
+    TEST(sem_isr.count == 0);  // given directly to waiter, not counted
+
+    g_current = NULL;
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
-int main(void)
+void test_main(int argc, char *argv[])
 {
-    printf("RTOS unit tests\n");
+    (void)argc; (void)argv;
+
+    MODULE("RTOS Kernel");
 
     test_list();
     test_list_sorted();
@@ -1076,7 +1858,24 @@ int main(void)
     test_task_inspection();
     test_notify_clear();
     test_sem_take_from_isr();
-
-    printf("\n%d passed, %d failed\n", g_pass, g_fail);
-    return g_fail == 0 ? 0 : 1;
+    test_task_delete();
+    test_task_delete_while_blocked();
+    test_suspend_resume();
+    test_task_yield();
+    test_timer_reset();
+    test_check_stack();
+    test_stack_hwm();
+    test_queue_send_isr_direct();
+    test_context_switch();
+    test_delay_zero();
+    test_name_truncation();
+    test_setprio_blocked();
+    test_notify_ipc_interaction();
+    test_double_notify();
+    test_mutex_non_owner();
+    test_timer_stop_from_callback();
+    test_idle_wakeup_ticks();
+    test_isr_queue_with_waiters();
+    test_max_tasks();
+    test_sem_give_isr_waiter();
 }

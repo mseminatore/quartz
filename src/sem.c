@@ -93,13 +93,18 @@ int rtos_semaphore_take(rtos_handle_t handle, uint32_t timeout_ticks)
     // If we were given the semaphore, we were popped from wait_list by give().
     // If we timed out, we are still on wait_list and were popped from G_BLOCKED
     // by the tick handler. Clean up the list we're still on.
+    // If a notification woke us, we were removed from wait_list by
+    // rtos_task_notify — detect this via notif_pending and treat as timeout.
     port_enter_critical();
     int on_list = list_remove(&sem->wait_list, self);
     if (on_list) rtos_task_blocked_remove(self);
+    int notified = self->notif_pending;
     self->ipc_wait = NULL;
     port_exit_critical();
 
-    return on_list ? RTOS_TIMEOUT : (RTOS_TRACE_SEM_TAKE(sem), RTOS_OK);
+    if (on_list || notified) return RTOS_TIMEOUT;
+    RTOS_TRACE_SEM_TAKE(sem);
+    return RTOS_OK;
 }
 
 //---------------------------------------------------------------------------

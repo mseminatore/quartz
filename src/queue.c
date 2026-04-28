@@ -91,6 +91,9 @@ int rtos_queue_send(rtos_handle_t handle, const void *item, uint32_t timeout_tic
     int on_list = list_remove(&q->send_wait, self);
     if (on_list) {
         rtos_task_blocked_remove(self);
+    } else if (self->notif_pending) {
+        // Notification woke us, not the queue — treat as timeout.
+        on_list = 1;
     } else if (q->count < q->capacity) {
         // We were woken because a receiver made space; complete the send now.
         memcpy(q->buf + q->tail * q->item_size, item, q->item_size);
@@ -159,6 +162,9 @@ int rtos_queue_receive(rtos_handle_t handle, void *item, uint32_t timeout_ticks)
     int on_list = list_remove(&q->recv_wait, self);
     if (on_list) {
         rtos_task_blocked_remove(self);
+    } else if (self->notif_pending) {
+        // Notification woke us, not the queue — treat as timeout.
+        on_list = 1;
     } else if (q->count > 0) {
         memcpy(item, q->buf + q->head * q->item_size, q->item_size);
         q->head = (q->head + 1) % q->capacity;
@@ -218,5 +224,8 @@ size_t rtos_queue_messages_waiting(rtos_handle_t handle)
 {
     rtos_queue_t *q = (rtos_queue_t *)handle;
     if (!q) return 0;
-    return q->count;
+    port_enter_critical();
+    size_t count = q->count;
+    port_exit_critical();
+    return count;
 }

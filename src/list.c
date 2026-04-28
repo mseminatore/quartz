@@ -76,7 +76,7 @@ void list_insert_tail(rtos_tcb_t **head, rtos_tcb_t *tcb)
     while (cur->next)
         cur = cur->next;
 
-        cur->next = tcb;
+    cur->next = tcb;
 }
 
 //---------------------------------------------------------------------------

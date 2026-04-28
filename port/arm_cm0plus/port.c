@@ -52,24 +52,33 @@ static void spinlock_release(void)
 
 // ---------------------------------------------------------------------------
 // Critical section (M0+ has no BASEPRI; must disable all interrupts)
+// Nesting is tracked via a counter so nested enter/exit pairs work correctly.
 // For multi-core: also acquire a hardware spinlock so that core 1 is
 // excluded from the critical section while core 0 holds it, and vice-versa.
 // ---------------------------------------------------------------------------
+
+static uint32_t g_critical_nesting = 0;
 
 void port_enter_critical(void)
 {
     __asm volatile ("cpsid i" ::: "memory");
 #if RTOS_NUM_CORES > 1
-    spinlock_acquire();
+    if (g_critical_nesting == 0)
+        spinlock_acquire();
 #endif
+    g_critical_nesting++;
 }
 
 void port_exit_critical(void)
 {
+    if (g_critical_nesting == 0) return;
+    g_critical_nesting--;
 #if RTOS_NUM_CORES > 1
-    spinlock_release();
+    if (g_critical_nesting == 0)
+        spinlock_release();
 #endif
-    __asm volatile ("cpsie i" ::: "memory");
+    if (g_critical_nesting == 0)
+        __asm volatile ("cpsie i" ::: "memory");
 }
 
 // ---------------------------------------------------------------------------

@@ -22,6 +22,7 @@ rtos_handle_t rtos_mutex_create(rtos_mutex_t *mutex);
 int  rtos_mutex_lock(rtos_handle_t mutex, uint32_t timeout_ticks);
 
 // Release. Unblocks the highest-priority waiter if any.
-void rtos_mutex_unlock(rtos_handle_t mutex);
+// Returns RTOS_OK on success, RTOS_ERR if the caller is not the owner.
+int rtos_mutex_unlock(rtos_handle_t mutex);
 
 #endif // RTOS_MUTEX_H

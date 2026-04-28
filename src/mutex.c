@@ -88,31 +88,40 @@ int rtos_mutex_lock(rtos_handle_t handle, uint32_t timeout_ticks)
 
     port_request_reschedule();
 
+    // Clean up: if still on wait_list we timed out; if notif_pending is set
+    // a notification woke us rather than the mutex being released to us.
     port_enter_critical();
     int on_list = list_remove(&mutex->wait_list, self);
     if (on_list) rtos_task_blocked_remove(self);
+    int notified = self->notif_pending;
     self->ipc_wait = NULL;
     port_exit_critical();
 
-    return on_list ? RTOS_TIMEOUT : (RTOS_TRACE_MUTEX_LOCK(mutex), RTOS_OK);
+    if (on_list || notified) return RTOS_TIMEOUT;
+    RTOS_TRACE_MUTEX_LOCK(mutex);
+    return RTOS_OK;
 }
 
 //---------------------------------------------------------------------------
 // Unlock a mutex. If there are tasks blocked waiting for the mutex, unblocks
 // the highest-priority one and gives it the mutex. Otherwise, sets the mutex to
-// the unlocked state. The caller must be the task currently holding the mutex;
-// behavior is undefined if this is not the case.
+// the unlocked state. Returns RTOS_ERR if the caller is not the mutex owner.
 //---------------------------------------------------------------------------
-void rtos_mutex_unlock(rtos_handle_t handle)
+int rtos_mutex_unlock(rtos_handle_t handle)
 {
     rtos_mutex_t *mutex = (rtos_mutex_t *)handle;
-    if (!mutex) return;
+    if (!mutex) return RTOS_ERR;
 
     port_enter_critical();
 
+    if (mutex->owner != current_task()) {
+        port_exit_critical();
+        return RTOS_ERR;
+    }
+
     // Restore inherited priority before transferring ownership.
     rtos_tcb_t *self = mutex->owner;
-    if (self && self->priority != self->base_priority)
+    if (self->priority != self->base_priority)
         self->priority = self->base_priority;
 
     rtos_tcb_t *waiter = list_pop_head(&mutex->wait_list);
@@ -128,4 +137,5 @@ void rtos_mutex_unlock(rtos_handle_t handle)
     port_exit_critical();
     RTOS_TRACE_MUTEX_UNLOCK(mutex);
     port_request_reschedule();
+    return RTOS_OK;
 }
