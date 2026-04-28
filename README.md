@@ -34,7 +34,8 @@ rtos/
 │   ├── mutex.c
 │   ├── queue.c
 │   ├── timer.c
-│   └── list.c        # Internal sorted linked list
+│   ├── list.c        # Internal sorted linked list
+│   └── compat.h      # Compiler compatibility (MSVC / GCC / Clang)
 ├── port/
 │   ├── arm_cm0plus/       # SysTick, PendSV context switch (RP2040)
 │   ├── arm_cm4/           # SysTick, BASEPRI critical sections, PendSV (generic M4F)
@@ -56,7 +57,9 @@ rtos/
 │   ├── esp32s3_qemu.cmake     # xtensa-esp32s3-elf-gcc toolchain file (Call0 ABI)
 │   └── arm_cm4.cmake          # arm-none-eabi-gcc toolchain file (Cortex-M4F)
 ├── test/
-│   └── test_rtos.c   # Host-side unit tests
+│   ├── test.h        # Testy unit-test framework (vendored)
+│   ├── test_main.c   # Testy entry point
+│   └── test_rtos.c   # Host-side unit tests (44 suites, 318 assertions)
 └── CMakeLists.txt
 ```
 
@@ -106,13 +109,19 @@ Edit `include/rtos_config.h` (or define before including `rtos.h`):
 
 ## Building
 
-### Host unit tests (macOS / Linux)
+### Host unit tests (macOS / Linux / Windows)
 
 ```sh
 cmake -B build
 cmake --build build
-./build/rtos_test
+./build/rtos_test          # macOS / Linux
+# or
+.\build\Debug\rtos_test.exe  # Windows (MSVC)
 ```
+
+The test suite uses the [testy](https://github.com/mseminatore/testy) micro-framework
+(vendored in `test/test.h`).  It builds on GCC, Clang, and MSVC without extra
+dependencies.
 
 ### RP2040 (requires [pico-sdk](https://github.com/raspberrypi/pico-sdk))
 
@@ -330,7 +339,7 @@ static rtos_mutex_t my_mutex;
 rtos_handle_t m = rtos_mutex_create(&my_mutex);
 
 rtos_mutex_lock(m, RTOS_WAIT_FOREVER);
-rtos_mutex_unlock(m);
+rtos_mutex_unlock(m);   // returns RTOS_OK, or RTOS_ERR if caller is not the owner
 ```
 
 ### Message queues
