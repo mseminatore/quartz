@@ -1825,6 +1825,39 @@ static void test_sem_give_isr_waiter(void)
 }
 
 // ---------------------------------------------------------------------------
+// rtos_task_handle_self
+// ---------------------------------------------------------------------------
+
+static void test_task_handle_self(void)
+{
+    SUITE("rtos_task_handle_self returns current task handle");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_tcb_t ta;
+    static uint32_t   sa[64];
+
+    rtos_handle_t h = rtos_task_create(&ta, sa, 64,
+                                        (void(*)(void*))1, NULL, "self", 1);
+
+    // Simulate being "the current task"
+    g_current = &ta;
+
+    rtos_handle_t self = rtos_task_handle_self();
+    TEST(self != NULL);
+    TEST(self == h);
+    TEST(rtos_task_get_name(self) != NULL);
+    TEST(strcmp(rtos_task_get_name(self), "self") == 0);
+
+    g_current = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -1878,4 +1911,5 @@ void test_main(int argc, char *argv[])
     test_isr_queue_with_waiters();
     test_max_tasks();
     test_sem_give_isr_waiter();
+    test_task_handle_self();
 }

@@ -463,6 +463,11 @@ uint32_t rtos_task_tick_count(void)
     return G_TICK_COUNT;
 }
 
+rtos_handle_t rtos_task_handle_self(void)
+{
+    return (rtos_handle_t)G_CURRENT;
+}
+
 //---------------------------------------------------------------------------
 // Delay until an absolute tick deadline, eliminating period drift.
 // *last_wake_tick is updated to the next deadline on each call.

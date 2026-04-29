@@ -100,6 +100,11 @@ void rtos_task_delete(rtos_handle_t task);
 // Return the current tick count.
 uint32_t rtos_task_tick_count(void);
 
+// Return the handle of the calling task. Useful for passing to APIs that
+// accept a task handle (e.g. rtos_task_notify) from within the task itself,
+// or from callbacks that need to wake a specific task.
+rtos_handle_t rtos_task_handle_self(void);
+
 // ---------------------------------------------------------------------------
 // Task notifications — per-task lightweight binary semaphore, zero allocation.
 // ---------------------------------------------------------------------------
