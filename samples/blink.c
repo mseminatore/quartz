@@ -47,7 +47,7 @@ static void blink_task(void *arg)
 {
     (void)arg;
     int state = 0;
-    uint32_t last_wake = rtos_task_tick_count();
+    rtos_tick_t last_wake = rtos_task_tick_count();
 
     for (;;)
     {

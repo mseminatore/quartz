@@ -23,7 +23,7 @@ rtos_handle_t rtos_semaphore_create_counting(rtos_sem_t *sem,
                                               uint32_t    initial_count);
 
 // Take (decrement). Returns RTOS_OK on success, RTOS_TIMEOUT if timed out.
-int  rtos_semaphore_take(rtos_handle_t sem, uint32_t timeout_ticks);
+int  rtos_semaphore_take(rtos_handle_t sem, rtos_tick_t timeout_ticks);
 
 // Give (increment). Unblocks the highest-priority waiter if any.
 void rtos_semaphore_give(rtos_handle_t sem);

@@ -283,7 +283,7 @@ uint8_t port_core_id(void)
 // ---------------------------------------------------------------------------
 
 #if RTOS_TICKLESS_IDLE
-uint32_t port_suppress_ticks(uint32_t max_ticks)
+rtos_tick_t port_suppress_ticks(rtos_tick_t max_ticks)
 {
     if (max_ticks == 0) return 0;
 
@@ -291,12 +291,12 @@ uint32_t port_suppress_ticks(uint32_t max_ticks)
     uint32_t one_tick_reload = (RTOS_CPU_HZ / RTOS_TICK_RATE_HZ) - 1u;
 
     // Cap to what fits in SysTick's 24-bit counter
-    uint32_t max_reload_24   = 0x00FFFFFFu;
+    uint32_t max_reload_24    = 0x00FFFFFFu;
     uint32_t max_suppressible = max_reload_24 / (one_tick_reload + 1u);
-    if (max_ticks > max_suppressible)
-        max_ticks = max_suppressible;
+    if (max_ticks > (rtos_tick_t)max_suppressible)
+        max_ticks = (rtos_tick_t)max_suppressible;
 
-    uint32_t sleep_reload = (one_tick_reload + 1u) * max_ticks - 1u;
+    uint32_t sleep_reload = (one_tick_reload + 1u) * (uint32_t)max_ticks - 1u;
 
     // Disable SysTick, reprogram for the extended period, re-enable
     SYST_CSR = 0x00u;              // stop
@@ -308,9 +308,9 @@ uint32_t port_suppress_ticks(uint32_t max_ticks)
     __asm volatile ("wfi" ::: "memory");
 
     // Measure how many ticks elapsed based on remaining count
-    uint32_t remaining = SYST_CVR;   // current down-counter value
-    uint32_t elapsed_cycles = sleep_reload - remaining;
-    uint32_t elapsed_ticks  = elapsed_cycles / (one_tick_reload + 1u);
+    uint32_t    remaining      = SYST_CVR;   // current down-counter value
+    uint32_t    elapsed_cycles = sleep_reload - remaining;
+    rtos_tick_t elapsed_ticks  = (rtos_tick_t)(elapsed_cycles / (one_tick_reload + 1u));
 
     // If SysTick wrapped (COUNTFLAG set), we slept the full period
     if (SYST_CSR & (1u << 16))

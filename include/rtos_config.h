@@ -81,6 +81,41 @@
 #define RTOS_WAIT_FOREVER   ((uint32_t)0xFFFFFFFFUL)
 #define RTOS_NO_WAIT        ((uint32_t)0UL)
 
+// --------------------------------------------------------------------------
+// Portable tick type — rtos_tick_t
+// --------------------------------------------------------------------------
+// On 32-bit targets (ARM, RISC-V, Xtensa) rtos_tick_t is uint32_t, which
+// gives a tick counter that overflows after ~49 days at 1000 Hz.
+//
+// On memory-constrained 8/16-bit targets (e.g. AVR ATmega328P) set
+// RTOS_TICK_TYPE_16BIT=1.  rtos_tick_t then becomes uint16_t, which
+// overflows after ~65 seconds at 1000 Hz but costs half the code and data
+// space for every tick-related variable and parameter.
+//
+// RTOS_WAIT_FOREVER and RTOS_NO_WAIT are automatically sized to match.
+
+#ifndef RTOS_TICK_TYPE_16BIT
+#   define RTOS_TICK_TYPE_16BIT  0
+#endif
+
+#include <stdint.h>
+
+#if RTOS_TICK_TYPE_16BIT
+    typedef uint16_t rtos_tick_t;
+#   define RTOS_TICK_MAX        ((rtos_tick_t)0xFFFFU)
+#   undef  RTOS_WAIT_FOREVER
+#   undef  RTOS_NO_WAIT
+#   define RTOS_WAIT_FOREVER    ((rtos_tick_t)0xFFFFU)
+#   define RTOS_NO_WAIT         ((rtos_tick_t)0U)
+#else
+    typedef uint32_t rtos_tick_t;
+#   define RTOS_TICK_MAX        ((rtos_tick_t)0xFFFFFFFFUL)
+#   undef  RTOS_WAIT_FOREVER
+#   undef  RTOS_NO_WAIT
+#   define RTOS_WAIT_FOREVER    ((rtos_tick_t)0xFFFFFFFFUL)
+#   define RTOS_NO_WAIT         ((rtos_tick_t)0UL)
+#endif
+
 // Return codes
 #define RTOS_OK     0
 #define RTOS_ERR   -1

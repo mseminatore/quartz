@@ -253,7 +253,7 @@ static void test_delay_until(void)
     // Manually advance tick counter for the test
     g_tick_count = 50;
 
-    uint32_t wake = 50;
+    rtos_tick_t wake = 50;
 
     // delay_until(50 → 50+20=70): current tick is 50 → should delay 20
     // (port_request_reschedule is a no-op on host; just verify no crash + wake advances)
@@ -678,7 +678,7 @@ static void test_notify_wait_forever(void)
     // Since we are testing the guard, simulate with WAIT_FOREVER directly:
     if (RTOS_WAIT_FOREVER != RTOS_NO_WAIT) {
         // Confirm that on_blocked remains 0 when WAIT_FOREVER used
-        uint32_t timeout_ticks = RTOS_WAIT_FOREVER;
+        rtos_tick_t timeout_ticks = RTOS_WAIT_FOREVER;
         if (timeout_ticks != RTOS_WAIT_FOREVER) {
             ta.wakeup_tick = g_tick_count + timeout_ticks;
             ta.on_blocked  = 1;
@@ -689,7 +689,7 @@ static void test_notify_wait_forever(void)
     TEST(g_blocked == NULL);
 
     // Advancing the tick must NOT wake the task
-    g_tick_count = 0xFFFFFFFF;  // worst-case: tick just before wrap
+    g_tick_count = RTOS_TICK_MAX;  // worst-case: tick just before wrap
     rtos_tick_handler();
     TEST(ta.state == TASK_BLOCKED);
 
@@ -766,8 +766,8 @@ static void test_blocked_list_wraparound(void)
 
     // t1 wakeup_tick just before wrap; t2 wakeup_tick just after wrap.
     // Signed comparison must order them t1 (0xFFFFFFF5) before t2 (0x10).
-    uint32_t tick_pre_wrap  = 0xFFFFFFF5u;
-    uint32_t tick_post_wrap = 0x00000010u;
+    rtos_tick_t tick_pre_wrap  = 0xFFFFFFF5u;
+    rtos_tick_t tick_post_wrap = 0x00000010u;
 
     list_insert_sorted_signed(&g_blocked, &t1, tick_pre_wrap);
     list_insert_sorted_signed(&g_blocked, &t2, tick_post_wrap);

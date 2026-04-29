@@ -256,17 +256,17 @@ uint8_t port_core_id(void)
 // ---------------------------------------------------------------------------
 
 #if RTOS_TICKLESS_IDLE
-uint32_t port_suppress_ticks(uint32_t max_ticks)
+rtos_tick_t port_suppress_ticks(rtos_tick_t max_ticks)
 {
     if (max_ticks == 0) return 0;
 
     uint32_t one_tick_reload  = (RTOS_CPU_HZ / RTOS_TICK_RATE_HZ) - 1u;
     uint32_t max_reload_24    = 0x00FFFFFFu;
     uint32_t max_suppressible = max_reload_24 / (one_tick_reload + 1u);
-    if (max_ticks > max_suppressible)
-        max_ticks = max_suppressible;
+    if (max_ticks > (rtos_tick_t)max_suppressible)
+        max_ticks = (rtos_tick_t)max_suppressible;
 
-    uint32_t sleep_reload = (one_tick_reload + 1u) * max_ticks - 1u;
+    uint32_t sleep_reload = (one_tick_reload + 1u) * (uint32_t)max_ticks - 1u;
 
     SYST_CSR = 0x00u;
     SYST_RVR = sleep_reload;
@@ -275,8 +275,8 @@ uint32_t port_suppress_ticks(uint32_t max_ticks)
 
     __asm volatile ("wfi" ::: "memory");
 
-    uint32_t remaining     = SYST_CVR;
-    uint32_t elapsed_ticks = (sleep_reload - remaining) / (one_tick_reload + 1u);
+    uint32_t     remaining     = SYST_CVR;
+    rtos_tick_t  elapsed_ticks = (rtos_tick_t)((sleep_reload - remaining) / (one_tick_reload + 1u));
 
     if (SYST_CSR & (1u << 16))
         elapsed_ticks = max_ticks;

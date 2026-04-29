@@ -12,7 +12,7 @@
 extern rtos_tcb_t  *rtos_next_task(void);
 extern rtos_tcb_t **rtos_current_tcb_ptr(void);
 extern void         rtos_task_make_ready(rtos_tcb_t *tcb);
-extern void         rtos_task_blocked_add(rtos_tcb_t *tcb, uint32_t timeout_ticks);
+extern void         rtos_task_blocked_add(rtos_tcb_t *tcb, rtos_tick_t timeout_ticks);
 extern void         rtos_task_blocked_remove(rtos_tcb_t *tcb);
 extern void         ready_add(rtos_tcb_t *tcb);
 extern void         ready_remove(rtos_tcb_t *tcb);
@@ -40,7 +40,7 @@ rtos_handle_t rtos_mutex_create(rtos_mutex_t *mutex)
 // TIMEOUT). If timeout_ticks is RTOS_NO_WAIT, do not block and return TIMEOUT 
 // immediately if the mutex is already locked.
 //---------------------------------------------------------------------------
-int rtos_mutex_lock(rtos_handle_t handle, uint32_t timeout_ticks)
+int rtos_mutex_lock(rtos_handle_t handle, rtos_tick_t timeout_ticks)
 {
     rtos_mutex_t *mutex = (rtos_mutex_t *)handle;
     if (!mutex) return RTOS_ERR;

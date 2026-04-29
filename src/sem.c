@@ -12,7 +12,7 @@
 extern rtos_tcb_t  *rtos_next_task(void);
 extern rtos_tcb_t **rtos_current_tcb_ptr(void);
 extern void         rtos_task_make_ready(rtos_tcb_t *tcb);
-extern void         rtos_task_blocked_add(rtos_tcb_t *tcb, uint32_t timeout_ticks);
+extern void         rtos_task_blocked_add(rtos_tcb_t *tcb, rtos_tick_t timeout_ticks);
 extern void         rtos_task_blocked_remove(rtos_tcb_t *tcb);
 
 #define current_task() (*rtos_current_tcb_ptr())
@@ -60,7 +60,7 @@ rtos_handle_t rtos_semaphore_create_counting(rtos_sem_t *sem,
 // returns TIMEOUT). If timeout_ticks is RTOS_NO_WAIT, do not block and return
 // TIMEOUT immediately if the semaphore is not available.
 //---------------------------------------------------------------------------
-int rtos_semaphore_take(rtos_handle_t handle, uint32_t timeout_ticks)
+int rtos_semaphore_take(rtos_handle_t handle, rtos_tick_t timeout_ticks)
 {
     rtos_sem_t *sem = (rtos_sem_t *)handle;
     if (!sem) return RTOS_ERR;

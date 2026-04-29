@@ -12,7 +12,7 @@
 // Used for the blocked list (key = wakeup_tick: soonest wakeup first) and
 // for IPC wait lists (key = priority: highest-priority waiter = lowest number first).
 //---------------------------------------------------------------------------
-void list_insert_sorted(rtos_tcb_t **head, rtos_tcb_t *tcb, uint32_t key)
+void list_insert_sorted(rtos_tcb_t **head, rtos_tcb_t *tcb, rtos_tick_t key)
 {
     tcb->sort_key = key;
     tcb->next = NULL;
@@ -33,13 +33,14 @@ void list_insert_sorted(rtos_tcb_t **head, rtos_tcb_t *tcb, uint32_t key)
 
 //---------------------------------------------------------------------------
 // Insert into a blocked list using signed comparison to handle wakeup_tick
-// wraparound correctly. When wakeup_tick crosses uint32_t max, unsigned
+// wraparound correctly. When wakeup_tick crosses rtos_tick_t max, unsigned
 // comparison would misorder entries; signed subtraction gives correct
-// relative ordering across the rollover point.
+// relative ordering across the rollover point (on 32-bit platforms; see
+// docs for 16-bit tick behaviour on AVR).
 // Use ONLY for G_BLOCKED; IPC wait lists (keyed by priority) use the
 // unsigned version above.
 //---------------------------------------------------------------------------
-void list_insert_sorted_signed(rtos_tcb_t **head, rtos_tcb_t *tcb, uint32_t key)
+void list_insert_sorted_signed(rtos_tcb_t **head, rtos_tcb_t *tcb, rtos_tick_t key)
 {
     tcb->sort_key = key;
     tcb->next = NULL;

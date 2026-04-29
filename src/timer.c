@@ -18,7 +18,7 @@
 #include "port.h"
 
 // Retrieve the current tick count without pulling in all of task.c.
-extern uint32_t rtos_task_tick_count(void);
+extern rtos_tick_t rtos_task_tick_count(void);
 
 static rtos_timer_t *g_timer_list  = NULL;  // sorted active timer list
                                              // owned by core 0 — only core 0's
@@ -79,7 +79,7 @@ static void timer_list_remove(rtos_timer_t *timer)
 //---------------------------------------------------------------------------
 rtos_handle_t rtos_timer_create(rtos_timer_t *timer,
                                 const char   *name,
-                                uint32_t      period_ticks,
+                                rtos_tick_t   period_ticks,
                                 int           periodic,
                                 void        (*cb)(rtos_handle_t timer))
 {
@@ -186,12 +186,12 @@ int rtos_timer_is_active(rtos_handle_t handle)
 // RTOS_WAIT_FOREVER if no timers are active. O(1) because the list is sorted.
 // Used by rtos_idle_next_wakeup_ticks() for tickless idle.
 //---------------------------------------------------------------------------
-uint32_t rtos_timer_min_remaining(void)
+rtos_tick_t rtos_timer_min_remaining(void)
 {
     if (!g_timer_list) return RTOS_WAIT_FOREVER;
-    uint32_t now  = rtos_task_tick_count();
-    int32_t  diff = (int32_t)(g_timer_list->abs_expiry_tick - now);
-    return diff > 0 ? (uint32_t)diff : 0;
+    rtos_tick_t now  = rtos_task_tick_count();
+    int32_t     diff = (int32_t)(g_timer_list->abs_expiry_tick - now);
+    return diff > 0 ? (rtos_tick_t)diff : 0;
 }
 
 //---------------------------------------------------------------------------
@@ -201,7 +201,7 @@ uint32_t rtos_timer_min_remaining(void)
 // For tickless idle, now may be many ticks ahead of the previous call;
 // periodic timers will fire once per missed period within the elapsed window.
 //---------------------------------------------------------------------------
-void rtos_timer_tick(uint32_t now)
+void rtos_timer_tick(rtos_tick_t now)
 {
     while (g_timer_list && (int32_t)(now - g_timer_list->abs_expiry_tick) >= 0)
     {

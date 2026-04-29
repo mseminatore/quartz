@@ -32,7 +32,7 @@ static rtos_tcb_t  *g_ready[RTOS_NUM_CORES][RTOS_MAX_PRIORITIES];
 static uint32_t     g_ready_bitmap[RTOS_NUM_CORES];
 static rtos_tcb_t  *g_blocked[RTOS_NUM_CORES];
 rtos_tcb_t         *g_current[RTOS_NUM_CORES];
-static uint32_t     g_tick_count[RTOS_NUM_CORES];
+static rtos_tick_t  g_tick_count[RTOS_NUM_CORES];
 
 static rtos_tcb_t   g_idle_tcb[RTOS_NUM_CORES];
 static uint8_t      g_idle_stack[RTOS_NUM_CORES][RTOS_IDLE_STACK_WORDS * RTOS_STACK_BYTES_PER_WORD];
@@ -51,7 +51,7 @@ static rtos_tcb_t  *g_ready[RTOS_MAX_PRIORITIES];
 static uint32_t     g_ready_bitmap;
 static rtos_tcb_t  *g_blocked;
 rtos_tcb_t         *g_current;
-static uint32_t     g_tick_count;
+static rtos_tick_t  g_tick_count;
 
 static rtos_tcb_t   g_idle_tcb;
 static uint8_t      g_idle_stack[RTOS_IDLE_STACK_WORDS * RTOS_STACK_BYTES_PER_WORD];
@@ -95,7 +95,7 @@ static void all_tasks_remove(rtos_tcb_t *tcb)
 // ---------------------------------------------------------------------------
 
 RTOS_WEAK void     port_cpu_idle(void)                 { }
-RTOS_WEAK uint32_t port_suppress_ticks(uint32_t n)     { (void)n; return 0; }
+RTOS_WEAK rtos_tick_t port_suppress_ticks(rtos_tick_t n) { (void)n; return 0; }
 RTOS_WEAK uint8_t  port_core_id(void)                  { return 0; }
 
 // ---------------------------------------------------------------------------
@@ -161,7 +161,7 @@ void rtos_task_blocked_remove(rtos_tcb_t *tcb)
 // Called from IPC primitives when blocking with a finite timeout.
 // Caller must be in a critical section.
 //---------------------------------------------------------------------------
-void rtos_task_blocked_add(rtos_tcb_t *tcb, uint32_t timeout_ticks)
+void rtos_task_blocked_add(rtos_tcb_t *tcb, rtos_tick_t timeout_ticks)
 {
     if (timeout_ticks == RTOS_WAIT_FOREVER) return;
     tcb->wakeup_tick = G_TICK_COUNT + timeout_ticks;
@@ -343,7 +343,7 @@ rtos_handle_t rtos_task_create_on_core(rtos_tcb_t *tcb,
 //---------------------------------------------------------------------------
 // Delay the current task for a number of ticks. If ticks is 0, yield instead.
 //---------------------------------------------------------------------------
-void rtos_task_delay(uint32_t ticks)
+void rtos_task_delay(rtos_tick_t ticks)
 {
     if (ticks == 0) {
         rtos_task_yield();
@@ -458,7 +458,7 @@ void rtos_task_delete(rtos_handle_t task)
 // Get the current tick count, which increments at a constant rate defined by
 // RTOS_TICK_RATE_HZ. Used for timing and delays.
 //---------------------------------------------------------------------------
-uint32_t rtos_task_tick_count(void)
+rtos_tick_t rtos_task_tick_count(void)
 {
     return G_TICK_COUNT;
 }
@@ -472,15 +472,15 @@ rtos_handle_t rtos_task_handle_self(void)
 // Delay until an absolute tick deadline, eliminating period drift.
 // *last_wake_tick is updated to the next deadline on each call.
 //---------------------------------------------------------------------------
-void rtos_task_delay_until(uint32_t *last_wake_tick, uint32_t period_ticks)
+void rtos_task_delay_until(rtos_tick_t *last_wake_tick, rtos_tick_t period_ticks)
 {
-    uint32_t next = *last_wake_tick + period_ticks;
+    rtos_tick_t next = *last_wake_tick + period_ticks;
     *last_wake_tick = next;
 
-    uint32_t now = G_TICK_COUNT;
+    rtos_tick_t now = G_TICK_COUNT;
     int32_t remaining = (int32_t)(next - now);
     if (remaining > 0)
-        rtos_task_delay((uint32_t)remaining);
+        rtos_task_delay((rtos_tick_t)remaining);
 }
 
 //---------------------------------------------------------------------------
@@ -531,7 +531,7 @@ void rtos_task_notify_from_isr(rtos_handle_t task)
 // Wait for a notification. Clears the pending flag and returns RTOS_OK when
 // notified. Returns RTOS_TIMEOUT if the timeout expires.
 //---------------------------------------------------------------------------
-int rtos_task_notify_wait(uint32_t timeout_ticks)
+int rtos_task_notify_wait(rtos_tick_t timeout_ticks)
 {
     port_enter_critical();
 
@@ -615,7 +615,7 @@ size_t rtos_task_get_runtime_stats(rtos_runtime_stat_t *buf, size_t n)
     if (!buf || n == 0) return 0;
 
     // Compute total ticks across all live tasks
-    uint32_t total = 0;
+    rtos_tick_t total = 0;
     for (size_t i = 0; i < g_all_tasks_count; i++)
         total += g_all_tasks[i]->runtime_ticks;
 
@@ -657,9 +657,9 @@ static void idle_task(void *arg)
 
 #if RTOS_TICKLESS_IDLE
         {
-            uint32_t max = rtos_idle_next_wakeup_ticks();
+            rtos_tick_t max = rtos_idle_next_wakeup_ticks();
             if (max > 1) {
-                uint32_t elapsed = port_suppress_ticks(max);
+                rtos_tick_t elapsed = port_suppress_ticks(max);
                 if (elapsed > 0)
                     rtos_tick_advance(elapsed);
             }
@@ -675,17 +675,17 @@ static void idle_task(void *arg)
 // the soonest wakeup event. Returns RTOS_WAIT_FOREVER only when both lists
 // are empty or all blocked entries have RTOS_WAIT_FOREVER timeouts.
 //---------------------------------------------------------------------------
-uint32_t rtos_idle_next_wakeup_ticks(void)
+rtos_tick_t rtos_idle_next_wakeup_ticks(void)
 {
-    uint32_t now = G_TICK_COUNT;
-    uint32_t task_ticks = RTOS_WAIT_FOREVER;
+    rtos_tick_t now = G_TICK_COUNT;
+    rtos_tick_t task_ticks = RTOS_WAIT_FOREVER;
     if (G_BLOCKED) {
         int32_t diff = (int32_t)(G_BLOCKED->wakeup_tick - now);
-        task_ticks = diff > 0 ? (uint32_t)diff : 0;
+        task_ticks = diff > 0 ? (rtos_tick_t)diff : 0;
     }
 
-    extern uint32_t rtos_timer_min_remaining(void);
-    uint32_t timer_ticks = rtos_timer_min_remaining();
+    extern rtos_tick_t rtos_timer_min_remaining(void);
+    rtos_tick_t timer_ticks = rtos_timer_min_remaining();
 
     return task_ticks < timer_ticks ? task_ticks : timer_ticks;
 }
@@ -693,7 +693,7 @@ uint32_t rtos_idle_next_wakeup_ticks(void)
 //---------------------------------------------------------------------------
 // Bulk-advance the tick count (used by tickless idle after port_suppress_ticks).
 //---------------------------------------------------------------------------
-void rtos_tick_advance(uint32_t n)
+void rtos_tick_advance(rtos_tick_t n)
 {
     G_TICK_COUNT += n;
 
@@ -707,7 +707,7 @@ void rtos_tick_advance(uint32_t n)
 
     // Process all timers due within the elapsed window in a single call.
     // rtos_timer_tick handles periodic timers that should fire multiple times.
-    extern void rtos_timer_tick(uint32_t now);
+    extern void rtos_timer_tick(rtos_tick_t now);
     rtos_timer_tick(G_TICK_COUNT);
 }
 
@@ -744,7 +744,7 @@ void rtos_tick_handler(void)
 
     // Fire software timers — only on core 0; g_timer_list is a single global
     // shared across cores and must not be walked concurrently by both SysTick ISRs.
-    extern void rtos_timer_tick(uint32_t now);
+    extern void rtos_timer_tick(rtos_tick_t now);
 #if RTOS_NUM_CORES > 1
     if (port_core_id() == 0)
 #endif

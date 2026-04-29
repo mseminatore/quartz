@@ -234,7 +234,7 @@ static void http_task(void *arg)
     rtos_semaphore_take(g_wifi_ready, RTOS_WAIT_FOREVER);
     printf("[http] network ready, starting periodic GET\n");
 
-    uint32_t last_req = rtos_task_tick_count();
+    rtos_tick_t last_req = rtos_task_tick_count();
 
     for (;;) {
         // Resolve hostname each time (DNS TTL honoured)
@@ -246,7 +246,7 @@ static void http_task(void *arg)
         dns_err = dns_gethostbyname(HTTP_HOST, &server_ip, NULL, NULL);
         cyw43_arch_lwip_end();
 
-        uint32_t dns_start = rtos_task_tick_count();
+        rtos_tick_t dns_start = rtos_task_tick_count();
         while (dns_err == ERR_INPROGRESS &&
                (int32_t)(rtos_task_tick_count() - dns_start) < 5000) {
             cyw43_arch_poll();
@@ -281,7 +281,7 @@ static void led_task(void *arg)
 {
     (void)arg;
     int state = 0;
-    uint32_t last_wake = rtos_task_tick_count();
+    rtos_tick_t last_wake = rtos_task_tick_count();
 
     for (;;) {
         state ^= 1;

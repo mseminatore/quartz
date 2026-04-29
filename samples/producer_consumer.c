@@ -37,7 +37,7 @@ static void producer_task(void *arg)
 {
     (void)arg;
     int value = 0;
-    uint32_t last_wake = rtos_task_tick_count();
+    rtos_tick_t last_wake = rtos_task_tick_count();
     for (;;) {
         rtos_queue_send(g_queue_handle, &value, RTOS_WAIT_FOREVER);
         value++;

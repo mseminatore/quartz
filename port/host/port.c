@@ -182,7 +182,7 @@ uint8_t port_core_id(void) { return 0; }
 // ---------------------------------------------------------------------------
 
 #if RTOS_TICKLESS_IDLE
-uint32_t port_suppress_ticks(uint32_t max_ticks)
+rtos_tick_t port_suppress_ticks(rtos_tick_t max_ticks)
 {
     if (max_ticks == 0) return 0;
     usleep((useconds_t)max_ticks * 1000u);  // 1 tick = 1 ms on the host

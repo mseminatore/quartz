@@ -37,15 +37,15 @@ typedef struct rtos_tcb {
     uint8_t             priority;
     uint8_t             base_priority;           // original priority before any inheritance boost
     rtos_task_state_t   state;
-    uint32_t            wakeup_tick;             // absolute tick at which task should unblock
-    uint32_t            sort_key;                // sort key when on an IPC wait list
+    rtos_tick_t         wakeup_tick;             // absolute tick at which task should unblock
+    rtos_tick_t         sort_key;                // sort key when on an IPC wait list
     char                name[RTOS_TASK_NAME_LEN];
     struct rtos_tcb    *next;                    // intrusive list link
     uint8_t             notif_pending;           // non-zero if a notification is waiting
     uint8_t             on_blocked;              // non-zero when on the per-core blocked list
     struct rtos_tcb   **ipc_wait;               // pointer to the IPC wait-list head this task is on (NULL if none)
 #if RTOS_ENABLE_RUNTIME_STATS
-    uint32_t            runtime_ticks;           // total ticks this task has been running
+    rtos_tick_t         runtime_ticks;           // total ticks this task has been running
 #endif
 #if RTOS_NUM_CORES > 1
     uint8_t             core;                    // CPU core this task is pinned to
@@ -80,12 +80,12 @@ void rtos_core1_entry(void);
 #endif
 
 // Delay the calling task for the given number of ticks.
-void rtos_task_delay(uint32_t ticks);
+void rtos_task_delay(rtos_tick_t ticks);
 
 // Delay until an absolute tick deadline. Eliminates period drift for periodic
 // tasks. *last_wake_tick should be initialised to rtos_task_tick_count() before
 // the first call. On each call it is advanced by period_ticks.
-void rtos_task_delay_until(uint32_t *last_wake_tick, uint32_t period_ticks);
+void rtos_task_delay_until(rtos_tick_t *last_wake_tick, rtos_tick_t period_ticks);
 
 // Voluntarily yield the CPU to the next ready task.
 void rtos_task_yield(void);
@@ -98,7 +98,7 @@ void rtos_task_resume(rtos_handle_t task);
 void rtos_task_delete(rtos_handle_t task);
 
 // Return the current tick count.
-uint32_t rtos_task_tick_count(void);
+rtos_tick_t rtos_task_tick_count(void);
 
 // Return the handle of the calling task. Useful for passing to APIs that
 // accept a task handle (e.g. rtos_task_notify) from within the task itself,
@@ -120,7 +120,7 @@ void rtos_task_notify_from_isr(rtos_handle_t task);
 // Wait for a notification. Returns RTOS_OK when notified, RTOS_TIMEOUT if
 // the timeout expires before a notification arrives. Pass RTOS_WAIT_FOREVER
 // to block indefinitely.
-int rtos_task_notify_wait(uint32_t timeout_ticks);
+int rtos_task_notify_wait(rtos_tick_t timeout_ticks);
 
 // ---------------------------------------------------------------------------
 // Task inspection APIs
@@ -160,9 +160,9 @@ uint32_t rtos_task_stack_high_water_mark(rtos_handle_t task);
 
 #if RTOS_ENABLE_RUNTIME_STATS
 typedef struct {
-    const char *name;
-    uint32_t    runtime_ticks;
-    uint8_t     percent;          // 0–100 (integer)
+    const char   *name;
+    rtos_tick_t   runtime_ticks;
+    uint8_t       percent;          // 0–100 (integer)
 } rtos_runtime_stat_t;
 
 // Fill buf[0..n-1] with stats for all live tasks. Returns number of entries

@@ -12,11 +12,11 @@
 // Insert tcb into the list headed by *head, sorted ascending by key.
 // For the ready list the key is priority (lower = higher priority).
 // For IPC wait lists the key is priority (same ordering).
-void list_insert_sorted(rtos_tcb_t **head, rtos_tcb_t *tcb, uint32_t key);
+void list_insert_sorted(rtos_tcb_t **head, rtos_tcb_t *tcb, rtos_tick_t key);
 
 // Insert into a blocked list (G_BLOCKED) using signed comparison so that
-// wakeup_tick values that span the uint32_t rollover are ordered correctly.
-void list_insert_sorted_signed(rtos_tcb_t **head, rtos_tcb_t *tcb, uint32_t key);
+// wakeup_tick values that span the rtos_tick_t rollover are ordered correctly.
+void list_insert_sorted_signed(rtos_tcb_t **head, rtos_tcb_t *tcb, rtos_tick_t key);
 
 // Insert at the tail (for FIFO within same priority).
 void list_insert_tail(rtos_tcb_t **head, rtos_tcb_t *tcb);

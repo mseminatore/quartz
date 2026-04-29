@@ -19,7 +19,7 @@ typedef struct {
 rtos_handle_t rtos_mutex_create(rtos_mutex_t *mutex);
 
 // Acquire. Returns RTOS_OK, or RTOS_TIMEOUT if timed out.
-int  rtos_mutex_lock(rtos_handle_t mutex, uint32_t timeout_ticks);
+int  rtos_mutex_lock(rtos_handle_t mutex, rtos_tick_t timeout_ticks);
 
 // Release. Unblocks the highest-priority waiter if any.
 // Returns RTOS_OK on success, RTOS_ERR if the caller is not the owner.

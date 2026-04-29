@@ -30,10 +30,10 @@ rtos_handle_t rtos_queue_create(rtos_queue_t *queue,
                                 size_t        capacity);
 
 // Send an item. Blocks up to timeout_ticks if the queue is full.
-int rtos_queue_send(rtos_handle_t queue, const void *item, uint32_t timeout_ticks);
+int rtos_queue_send(rtos_handle_t queue, const void *item, rtos_tick_t timeout_ticks);
 
 // Receive an item. Blocks up to timeout_ticks if the queue is empty.
-int rtos_queue_receive(rtos_handle_t queue, void *item, uint32_t timeout_ticks);
+int rtos_queue_receive(rtos_handle_t queue, void *item, rtos_tick_t timeout_ticks);
 
 // ISR-safe Send. Returns RTOS_OK or RTOS_ERR (full). Does not block.
 int rtos_queue_send_from_isr(rtos_handle_t queue, const void *item);

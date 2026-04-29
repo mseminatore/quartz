@@ -115,7 +115,7 @@ static uint32_t   g_sampler_stack[256];
 static void sampler_task(void *arg)
 {
     (void)arg;
-    uint32_t last_wake = rtos_task_tick_count();
+    rtos_tick_t last_wake = rtos_task_tick_count();
 
     for (;;) {
         uint16_t raw = hw_adc_read();
@@ -141,7 +141,7 @@ static void monitor_task(void *arg)
     uint32_t samples = 0;
     float    sum     = 0.0f;
 
-    uint32_t last_print = rtos_task_tick_count();
+    rtos_tick_t last_print = rtos_task_tick_count();
 
     for (;;) {
         uint16_t raw;

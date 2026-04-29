@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "../include/rtos_config.h"
 
 // Initialise the hardware tick timer and any port-specific state.
 // Called once by vRTOSStart() before launching the first task.
@@ -43,7 +44,7 @@ void port_cpu_idle(void);
 // actually elapsed (may be less than max_ticks if another interrupt fired).
 // Implement this only when RTOS_TICKLESS_IDLE=1 is desired for your port.
 // The default stub (in task.c) returns 0 (no ticks suppressed).
-uint32_t port_suppress_ticks(uint32_t max_ticks);
+rtos_tick_t port_suppress_ticks(rtos_tick_t max_ticks);
 
 // Return the current CPU core index (0-based).  On single-core targets,
 // always returns 0.  On dual-core targets (RP2040, ESP32-S3) this reads

@@ -13,7 +13,7 @@
 extern rtos_tcb_t  *rtos_next_task(void);
 extern rtos_tcb_t **rtos_current_tcb_ptr(void);
 extern void         rtos_task_make_ready(rtos_tcb_t *tcb);
-extern void         rtos_task_blocked_add(rtos_tcb_t *tcb, uint32_t timeout_ticks);
+extern void         rtos_task_blocked_add(rtos_tcb_t *tcb, rtos_tick_t timeout_ticks);
 extern void         rtos_task_blocked_remove(rtos_tcb_t *tcb);
 
 #define current_task() (*rtos_current_tcb_ptr())
@@ -50,7 +50,7 @@ rtos_handle_t rtos_queue_create(rtos_queue_t *queue,
 // the timeout expires (in which case the task returns TIMEOUT). If timeout_ticks is
 // RTOS_NO_WAIT, do not block and return TIMEOUT immediately if the queue is full.
 //---------------------------------------------------------------------------
-int rtos_queue_send(rtos_handle_t handle, const void *item, uint32_t timeout_ticks)
+int rtos_queue_send(rtos_handle_t handle, const void *item, rtos_tick_t timeout_ticks)
 {
     rtos_queue_t *q = (rtos_queue_t *)handle;
     if (!q || !item) return RTOS_ERR;
@@ -121,7 +121,7 @@ int rtos_queue_send(rtos_handle_t handle, const void *item, uint32_t timeout_tic
 // the task returns TIMEOUT). If timeout_ticks is RTOS_NO_WAIT, do not block 
 // and return TIMEOUT immediately if the queue is empty.
 //---------------------------------------------------------------------------
-int rtos_queue_receive(rtos_handle_t handle, void *item, uint32_t timeout_ticks)
+int rtos_queue_receive(rtos_handle_t handle, void *item, rtos_tick_t timeout_ticks)
 {
     rtos_queue_t *q = (rtos_queue_t *)handle;
     if (!q || !item) return RTOS_ERR;
