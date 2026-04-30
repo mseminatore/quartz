@@ -17,6 +17,8 @@
 #include "../include/rtos_trace.h"
 #include "port.h"
 
+#if RTOS_ENABLE_SOFTWARE_TIMERS
+
 // Retrieve the current tick count without pulling in all of task.c.
 extern rtos_tick_t rtos_task_tick_count(void);
 
@@ -231,3 +233,5 @@ void rtos_timer_tick(rtos_tick_t now)
         }
     }
 }
+
+#endif // RTOS_ENABLE_SOFTWARE_TIMERS

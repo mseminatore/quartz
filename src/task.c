@@ -102,12 +102,14 @@ RTOS_WEAK uint8_t  port_core_id(void)                  { return 0; }
 // Weak overflow hook — spin by default; user may override to log / halt.
 // ---------------------------------------------------------------------------
 
+#if RTOS_STACK_OVERFLOW_CHECK
 RTOS_WEAK
 void rtos_stack_overflow_hook(rtos_tcb_t *tcb)
 {
     (void)tcb;
     for (;;) ;
 }
+#endif
 
 // ---------------------------------------------------------------------------
 // Trace weak stubs — do nothing; user overrides the ones they want.
@@ -243,13 +245,17 @@ static rtos_handle_t task_create_impl(rtos_tcb_t *tcb,
     
     tcb->name[len]   = '\0';
     tcb->priority    = priority;
+#if RTOS_ENABLE_PRIORITY_INHERITANCE
     tcb->base_priority = priority;
+#endif
     tcb->state       = TASK_READY;
     tcb->wakeup_tick = 0;
     tcb->on_blocked  = 0;
     tcb->ipc_wait    = NULL;
+#if RTOS_STACK_OVERFLOW_CHECK || RTOS_STACK_WATERMARK
     tcb->stack_base  = stack;
     tcb->stack_words = stack_words;
+#endif
     tcb->next        = NULL;
 
 #if RTOS_NUM_CORES > 1
@@ -374,6 +380,7 @@ void rtos_task_yield(void)
 // Suspend a task, preventing it from running until resumed. If task is NULL,
 // suspend the current task. If the task is already suspended, does nothing.
 //---------------------------------------------------------------------------
+#if RTOS_ENABLE_TASK_SUSPEND
 void rtos_task_suspend(rtos_handle_t task)
 {
     rtos_tcb_t *tcb = task ? (rtos_tcb_t *)task : G_CURRENT;
@@ -415,6 +422,7 @@ void rtos_task_resume(rtos_handle_t task)
 
     port_request_reschedule();
 }
+#endif // RTOS_ENABLE_TASK_SUSPEND
 
 //---------------------------------------------------------------------------
 // Delete a task, removing it from all lists and marking its state as TASK_DELETED.
@@ -423,6 +431,7 @@ void rtos_task_resume(rtos_handle_t task)
 // If the current task is deleted, the scheduler will immediately switch to another
 // ready task.
 //---------------------------------------------------------------------------
+#if RTOS_ENABLE_TASK_DELETE
 void rtos_task_delete(rtos_handle_t task)
 {
     rtos_tcb_t *tcb = task ? (rtos_tcb_t *)task : G_CURRENT;
@@ -453,6 +462,7 @@ void rtos_task_delete(rtos_handle_t task)
     if (tcb == G_CURRENT)
         port_request_reschedule();
 }
+#endif // RTOS_ENABLE_TASK_DELETE
 
 //---------------------------------------------------------------------------
 // Get the current tick count, which increments at a constant rate defined by
@@ -487,6 +497,7 @@ void rtos_task_delay_until(rtos_tick_t *last_wake_tick, rtos_tick_t period_ticks
 // Send a notification to a task. If the task is blocked waiting for a
 // notification, unblock it immediately.
 //---------------------------------------------------------------------------
+#if RTOS_ENABLE_TASK_NOTIFY
 void rtos_task_notify(rtos_handle_t task)
 {
     rtos_tcb_t *tcb = (rtos_tcb_t *)task;
@@ -564,6 +575,7 @@ int rtos_task_notify_wait(rtos_tick_t timeout_ticks)
 
     return notified ? RTOS_OK : RTOS_TIMEOUT;
 }
+#endif // RTOS_ENABLE_TASK_NOTIFY (notify, notify_from_isr, notify_wait)
 
 //---------------------------------------------------------------------------
 // Debug: check whether a task's stack sentinel is still intact.
@@ -684,10 +696,13 @@ rtos_tick_t rtos_idle_next_wakeup_ticks(void)
         task_ticks = diff > 0 ? (rtos_tick_t)diff : 0;
     }
 
+#if RTOS_ENABLE_SOFTWARE_TIMERS
     extern rtos_tick_t rtos_timer_min_remaining(void);
     rtos_tick_t timer_ticks = rtos_timer_min_remaining();
-
     return task_ticks < timer_ticks ? task_ticks : timer_ticks;
+#else
+    return task_ticks;
+#endif
 }
 
 //---------------------------------------------------------------------------
@@ -707,8 +722,10 @@ void rtos_tick_advance(rtos_tick_t n)
 
     // Process all timers due within the elapsed window in a single call.
     // rtos_timer_tick handles periodic timers that should fire multiple times.
+#if RTOS_ENABLE_SOFTWARE_TIMERS
     extern void rtos_timer_tick(rtos_tick_t now);
     rtos_timer_tick(G_TICK_COUNT);
+#endif
 }
 
 //---------------------------------------------------------------------------
@@ -744,11 +761,13 @@ void rtos_tick_handler(void)
 
     // Fire software timers — only on core 0; g_timer_list is a single global
     // shared across cores and must not be walked concurrently by both SysTick ISRs.
+#if RTOS_ENABLE_SOFTWARE_TIMERS
     extern void rtos_timer_tick(rtos_tick_t now);
 #if RTOS_NUM_CORES > 1
     if (port_core_id() == 0)
 #endif
         rtos_timer_tick(G_TICK_COUNT);
+#endif // RTOS_ENABLE_SOFTWARE_TIMERS
 
     port_request_reschedule();
 }
@@ -901,11 +920,15 @@ int rtos_task_set_priority(rtos_handle_t task, uint8_t new_priority)
     if (tcb->state == TASK_READY || tcb->state == TASK_RUNNING) {
         ready_remove(tcb);
         tcb->priority      = new_priority;
+#if RTOS_ENABLE_PRIORITY_INHERITANCE
         tcb->base_priority = new_priority;
+#endif
         ready_add(tcb);
     } else {
         tcb->priority      = new_priority;
+#if RTOS_ENABLE_PRIORITY_INHERITANCE
         tcb->base_priority = new_priority;
+#endif
     }
 
     port_exit_critical();
@@ -917,9 +940,11 @@ int rtos_task_set_priority(rtos_handle_t task, uint8_t new_priority)
 // Clear a pending task notification on the calling task without blocking.
 // Use this to discard a stale notification before entering a wait loop.
 //---------------------------------------------------------------------------
+#if RTOS_ENABLE_TASK_NOTIFY
 void rtos_task_notify_clear(void)
 {
     port_enter_critical();
     G_CURRENT->notif_pending = 0;
     port_exit_critical();
 }
+#endif // RTOS_ENABLE_TASK_NOTIFY

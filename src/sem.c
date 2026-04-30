@@ -98,7 +98,11 @@ int rtos_semaphore_take(rtos_handle_t handle, rtos_tick_t timeout_ticks)
     port_enter_critical();
     int on_list = list_remove(&sem->wait_list, self);
     if (on_list) rtos_task_blocked_remove(self);
+#if RTOS_ENABLE_TASK_NOTIFY
     int notified = self->notif_pending;
+#else
+    int notified = 0;
+#endif
     self->ipc_wait = NULL;
     port_exit_critical();
 

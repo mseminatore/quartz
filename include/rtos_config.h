@@ -128,6 +128,7 @@
 // Stack overflow detection: fill the bottom 4 words of each task stack with a
 // sentinel value and check the first sentinel word each tick.
 // Call rtos_stack_overflow_hook() (weak, user-overridable) on detection.
+// Defaults to 0 (off) — useful during development but unnecessary in production.
 #ifndef RTOS_STACK_OVERFLOW_CHECK
 #   define RTOS_STACK_OVERFLOW_CHECK  1
 #endif
@@ -173,6 +174,42 @@
 // scheduler state and spinlock-backed critical sections.
 #ifndef RTOS_NUM_CORES
 #   define RTOS_NUM_CORES  1
+#endif
+
+// --------------------------------------------------------------------------
+// Feature enable/disable options
+// --------------------------------------------------------------------------
+// Each option defaults to 1 (enabled) to preserve full backward compatibility.
+// Set to 0 to omit the feature and reduce flash/RAM footprint.
+
+// Enable rtos_task_delete(). Setting to 0 saves ~488 bytes of flash.
+// Most production designs create tasks at startup and never delete them.
+#ifndef RTOS_ENABLE_TASK_DELETE
+#   define RTOS_ENABLE_TASK_DELETE  1
+#endif
+
+// Enable rtos_task_suspend() and rtos_task_resume(). Setting to 0 saves ~276 bytes.
+#ifndef RTOS_ENABLE_TASK_SUSPEND
+#   define RTOS_ENABLE_TASK_SUSPEND  1
+#endif
+
+// Enable task notifications (rtos_task_notify, rtos_task_notify_wait, etc.).
+// Setting to 0 saves ~592 bytes of flash and removes notif_pending from the TCB.
+#ifndef RTOS_ENABLE_TASK_NOTIFY
+#   define RTOS_ENABLE_TASK_NOTIFY  1
+#endif
+
+// Enable software timers (rtos_timer_*). Setting to 0 compiles out timer.c
+// entirely, saving ~816 bytes of flash and 8 bytes of BSS.
+#ifndef RTOS_ENABLE_SOFTWARE_TIMERS
+#   define RTOS_ENABLE_SOFTWARE_TIMERS  1
+#endif
+
+// Enable priority inheritance in rtos_mutex_lock/unlock. Setting to 0 saves
+// ~70 bytes and removes the base_priority field from the TCB (1 byte per task).
+// Only disable if all mutex users have the same priority (no inversion risk).
+#ifndef RTOS_ENABLE_PRIORITY_INHERITANCE
+#   define RTOS_ENABLE_PRIORITY_INHERITANCE  1
 #endif
 
 #endif // RTOS_CONFIG_H

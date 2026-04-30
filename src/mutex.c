@@ -63,14 +63,15 @@ int rtos_mutex_lock(rtos_handle_t handle, rtos_tick_t timeout_ticks)
 
     // Block current task on the mutex wait list and the tick-wakeup list
     rtos_tcb_t *self  = current_task();
-    rtos_tcb_t *owner = mutex->owner;
     self->state = TASK_BLOCKED;
     self->ipc_wait = &mutex->wait_list;
     list_insert_sorted(&mutex->wait_list, self, self->priority);
     rtos_task_blocked_add(self, timeout_ticks);
 
+#if RTOS_ENABLE_PRIORITY_INHERITANCE
     // Priority inheritance: if the owner has lower priority (higher number),
     // boost it so it can release the mutex sooner (single-level, no chain).
+    rtos_tcb_t *owner = mutex->owner;
     if (owner && owner->priority > self->priority) {
         if (owner->state == TASK_READY) {
             ready_remove(owner);
@@ -83,6 +84,7 @@ int rtos_mutex_lock(rtos_handle_t handle, rtos_tick_t timeout_ticks)
             owner->priority = self->priority;
         }
     }
+#endif
 
     port_exit_critical();
 
@@ -93,7 +95,11 @@ int rtos_mutex_lock(rtos_handle_t handle, rtos_tick_t timeout_ticks)
     port_enter_critical();
     int on_list = list_remove(&mutex->wait_list, self);
     if (on_list) rtos_task_blocked_remove(self);
+#if RTOS_ENABLE_TASK_NOTIFY
     int notified = self->notif_pending;
+#else
+    int notified = 0;
+#endif
     self->ipc_wait = NULL;
     port_exit_critical();
 
@@ -121,8 +127,10 @@ int rtos_mutex_unlock(rtos_handle_t handle)
 
     // Restore inherited priority before transferring ownership.
     rtos_tcb_t *self = mutex->owner;
+#if RTOS_ENABLE_PRIORITY_INHERITANCE
     if (self->priority != self->base_priority)
         self->priority = self->base_priority;
+#endif
 
     rtos_tcb_t *waiter = list_pop_head(&mutex->wait_list);
     if (waiter) 

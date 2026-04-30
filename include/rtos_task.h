@@ -32,16 +32,22 @@ enum Priority {
 // Task Control Block — storage provided by the user as a static variable
 typedef struct rtos_tcb {
     void               *sp;                      // saved stack pointer (port-specific type)
+#if RTOS_STACK_OVERFLOW_CHECK || RTOS_STACK_WATERMARK
     void               *stack_base;              // bottom of stack (for overflow detection)
     size_t              stack_words;
+#endif
     uint8_t             priority;
+#if RTOS_ENABLE_PRIORITY_INHERITANCE
     uint8_t             base_priority;           // original priority before any inheritance boost
+#endif
     rtos_task_state_t   state;
     rtos_tick_t         wakeup_tick;             // absolute tick at which task should unblock
     rtos_tick_t         sort_key;                // sort key when on an IPC wait list
     char                name[RTOS_TASK_NAME_LEN];
     struct rtos_tcb    *next;                    // intrusive list link
+#if RTOS_ENABLE_TASK_NOTIFY
     uint8_t             notif_pending;           // non-zero if a notification is waiting
+#endif
     uint8_t             on_blocked;              // non-zero when on the per-core blocked list
     struct rtos_tcb   **ipc_wait;               // pointer to the IPC wait-list head this task is on (NULL if none)
 #if RTOS_ENABLE_RUNTIME_STATS
@@ -91,11 +97,15 @@ void rtos_task_delay_until(rtos_tick_t *last_wake_tick, rtos_tick_t period_ticks
 void rtos_task_yield(void);
 
 // Suspend / resume a task by handle (pass NULL to target the current task).
+#if RTOS_ENABLE_TASK_SUSPEND
 void rtos_task_suspend(rtos_handle_t task);
 void rtos_task_resume(rtos_handle_t task);
+#endif
 
 // Remove a task from all lists. Pass NULL to delete the current task.
+#if RTOS_ENABLE_TASK_DELETE
 void rtos_task_delete(rtos_handle_t task);
+#endif
 
 // Return the current tick count.
 rtos_tick_t rtos_task_tick_count(void);
@@ -107,7 +117,9 @@ rtos_handle_t rtos_task_handle_self(void);
 
 // ---------------------------------------------------------------------------
 // Task notifications — per-task lightweight binary semaphore, zero allocation.
+// Only available when RTOS_ENABLE_TASK_NOTIFY is non-zero.
 // ---------------------------------------------------------------------------
+#if RTOS_ENABLE_TASK_NOTIFY
 
 // Send a notification to a task (from task context). If the task is blocked
 // waiting for a notification, it is unblocked immediately.
@@ -121,6 +133,12 @@ void rtos_task_notify_from_isr(rtos_handle_t task);
 // the timeout expires before a notification arrives. Pass RTOS_WAIT_FOREVER
 // to block indefinitely.
 int rtos_task_notify_wait(rtos_tick_t timeout_ticks);
+
+// Clear a pending task notification on the calling task without blocking.
+// Useful for draining a stale notification before a fresh wait loop.
+void rtos_task_notify_clear(void);
+
+#endif // RTOS_ENABLE_TASK_NOTIFY
 
 // ---------------------------------------------------------------------------
 // Task inspection APIs
@@ -140,10 +158,6 @@ uint8_t rtos_task_get_priority(rtos_handle_t task);
 // new_priority must be in 0 .. RTOS_MAX_PRIORITIES-2 (idle is reserved).
 // Returns RTOS_OK on success, RTOS_ERR if new_priority is out of range.
 int rtos_task_set_priority(rtos_handle_t task, uint8_t new_priority);
-
-// Clear a pending task notification on the calling task without blocking.
-// Useful for draining a stale notification before a fresh wait loop.
-void rtos_task_notify_clear(void);
 
 // Check whether a task's stack sentinel has been overwritten.
 // Returns RTOS_OK if intact, RTOS_ERR if overflow detected.

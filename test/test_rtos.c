@@ -205,6 +205,7 @@ static void test_list_sorted(void)
     TEST(head->next->next->next->next == NULL);
 }
 
+#if RTOS_ENABLE_TASK_NOTIFY
 static void test_task_notify(void)
 {
     SUITE("task notifications");
@@ -239,6 +240,7 @@ static void test_task_notify(void)
 
     g_current = NULL;
 }
+#endif // RTOS_ENABLE_TASK_NOTIFY
 
 static void test_delay_until(void)
 {
@@ -393,6 +395,7 @@ static void test_ipc_timeout(void)
     g_tick_count = 0;
 }
 
+#if RTOS_ENABLE_PRIORITY_INHERITANCE
 static void test_priority_inheritance(void)
 {
     SUITE("priority inheritance");
@@ -451,7 +454,9 @@ static void test_priority_inheritance(void)
 
     g_current = NULL;
 }
+#endif // RTOS_ENABLE_PRIORITY_INHERITANCE
 
+#if RTOS_ENABLE_SOFTWARE_TIMERS
 static void test_timers(void)
 {
     SUITE("timers");
@@ -490,6 +495,7 @@ static void test_timers(void)
     rtos_timer_stop(ph);
     TEST(ptimer.active == 0);
 }
+#endif // RTOS_ENABLE_SOFTWARE_TIMERS
 
 // ---------------------------------------------------------------------------
 // Test: tick wraparound correctness
@@ -598,10 +604,7 @@ static void test_queue_blocking_send(void)
     g_blocked = NULL;
 }
 
-// ---------------------------------------------------------------------------
-// Test: suspend while blocked on semaphore cleans ipc_wait list
-// ---------------------------------------------------------------------------
-
+#if RTOS_ENABLE_TASK_SUSPEND
 static void test_ipc_suspend_cleanup(void)
 {
     SUITE("ipc suspend cleanup");
@@ -649,7 +652,9 @@ static void test_ipc_suspend_cleanup(void)
     g_tick_count = 0;
     g_blocked = NULL;
 }
+#endif // RTOS_ENABLE_TASK_SUSPEND
 
+#if RTOS_ENABLE_TASK_NOTIFY
 // ---------------------------------------------------------------------------
 // Test: notify_wait(RTOS_WAIT_FOREVER) must not wake after 1 tick (Bug A)
 // ---------------------------------------------------------------------------
@@ -745,6 +750,7 @@ static void test_notify_ipc_blocked(void)
     g_tick_count = 0;
     g_blocked = NULL;
 }
+#endif // RTOS_ENABLE_TASK_NOTIFY
 
 // ---------------------------------------------------------------------------
 // Test: blocked list signed sort handles wakeup_tick wraparound (Bug C)
@@ -851,6 +857,7 @@ static void test_queue_recv_from_isr(void)
     g_blocked = NULL;
 }
 
+#if RTOS_ENABLE_SOFTWARE_TIMERS
 // ---------------------------------------------------------------------------
 // Test: RTOS_MAX_TIMERS limit is enforced
 // ---------------------------------------------------------------------------
@@ -928,6 +935,7 @@ static void test_timer_min_remaining(void)
     TEST(rtos_timer_min_remaining() == RTOS_WAIT_FOREVER);
     TEST(rtos_timer_is_active(ha2) == 0);
 }
+#endif // RTOS_ENABLE_SOFTWARE_TIMERS
 
 // ---------------------------------------------------------------------------
 // Test: task inspection and rtos_task_set_priority
@@ -954,7 +962,9 @@ static void test_task_inspection(void)
     // Raise priority — task is READY so it must be moved in ready list
     TEST(RTOS_OK == rtos_task_set_priority(h, 1));
     TEST(rtos_task_get_priority(h) == 1);
+#if RTOS_ENABLE_PRIORITY_INHERITANCE
     TEST(inspect_tcb.base_priority == 1);
+#endif
 
     // Reject idle-priority assignment
     TEST(RTOS_ERR == rtos_task_set_priority(h, RTOS_MAX_PRIORITIES - 1));
@@ -969,6 +979,7 @@ static void test_task_inspection(void)
     for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
 }
 
+#if RTOS_ENABLE_TASK_NOTIFY
 // ---------------------------------------------------------------------------
 // Test: rtos_task_notify_clear
 // ---------------------------------------------------------------------------
@@ -999,6 +1010,7 @@ static void test_notify_clear(void)
 
     g_current = NULL;
 }
+#endif // RTOS_ENABLE_TASK_NOTIFY
 
 // ---------------------------------------------------------------------------
 // Test: rtos_semaphore_take_from_isr
@@ -1033,6 +1045,7 @@ static void test_sem_take_from_isr(void)
     TEST(RTOS_ERR == rtos_semaphore_take_from_isr(NULL));
 }
 
+#if RTOS_ENABLE_TASK_DELETE
 // ---------------------------------------------------------------------------
 // TEST-1: rtos_task_delete
 // ---------------------------------------------------------------------------
@@ -1107,7 +1120,9 @@ static void test_task_delete_while_blocked(void)
     g_ready_bitmap = 0;
     for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
 }
+#endif // RTOS_ENABLE_TASK_DELETE
 
+#if RTOS_ENABLE_TASK_SUSPEND
 // ---------------------------------------------------------------------------
 // TEST-2: rtos_task_suspend / resume standalone
 // ---------------------------------------------------------------------------
@@ -1157,6 +1172,7 @@ static void test_suspend_resume(void)
     g_ready_bitmap = 0;
     for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
 }
+#endif // RTOS_ENABLE_TASK_SUSPEND
 
 // ---------------------------------------------------------------------------
 // TEST-3: rtos_task_yield
@@ -1185,6 +1201,7 @@ static void test_task_yield(void)
     for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
 }
 
+#if RTOS_ENABLE_SOFTWARE_TIMERS
 // ---------------------------------------------------------------------------
 // TEST-4: rtos_timer_reset
 // ---------------------------------------------------------------------------
@@ -1220,7 +1237,9 @@ static void test_timer_reset(void)
 
     rtos_timer_stop(th);
 }
+#endif // RTOS_ENABLE_SOFTWARE_TIMERS
 
+#if RTOS_STACK_OVERFLOW_CHECK
 // ---------------------------------------------------------------------------
 // TEST-5: rtos_task_check_stack
 // ---------------------------------------------------------------------------
@@ -1257,6 +1276,7 @@ static void test_check_stack(void)
     g_ready_bitmap = 0;
     for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
 }
+#endif // RTOS_STACK_OVERFLOW_CHECK
 
 // ---------------------------------------------------------------------------
 // TEST-6: rtos_task_stack_high_water_mark
@@ -1431,6 +1451,7 @@ static void test_name_truncation(void)
     for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
 }
 
+#if RTOS_ENABLE_TASK_SUSPEND && RTOS_ENABLE_PRIORITY_INHERITANCE
 // ---------------------------------------------------------------------------
 // TEST-11: rtos_task_set_priority on blocked/suspended tasks
 // ---------------------------------------------------------------------------
@@ -1480,7 +1501,9 @@ static void test_setprio_blocked(void)
     g_ready_bitmap = 0;
     for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
 }
+#endif // RTOS_ENABLE_TASK_SUSPEND && RTOS_ENABLE_PRIORITY_INHERITANCE
 
+#if RTOS_ENABLE_TASK_NOTIFY
 // ---------------------------------------------------------------------------
 // TEST-12: notification + IPC interaction (BUG-1 scenario)
 // ---------------------------------------------------------------------------
@@ -1567,6 +1590,7 @@ static void test_double_notify(void)
     g_ready_bitmap = 0;
     for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
 }
+#endif // RTOS_ENABLE_TASK_NOTIFY (test_double_notify)
 
 // ---------------------------------------------------------------------------
 // TEST-14: mutex non-owner unlock returns error
@@ -1612,6 +1636,7 @@ static void test_mutex_non_owner(void)
     for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
 }
 
+#if RTOS_ENABLE_SOFTWARE_TIMERS
 // ---------------------------------------------------------------------------
 // TEST-15: timer stop from within callback
 // ---------------------------------------------------------------------------
@@ -1646,6 +1671,7 @@ static void test_timer_stop_from_callback(void)
     for (int i = 0; i < 10; i++) { g_tick_count++; rtos_timer_tick(g_tick_count); }
     TEST(g_timer_fires == 1);  // still 1
 }
+#endif // RTOS_ENABLE_SOFTWARE_TIMERS
 
 // ---------------------------------------------------------------------------
 // TEST-16: rtos_idle_next_wakeup_ticks
@@ -1747,6 +1773,7 @@ static void test_isr_queue_with_waiters(void)
     g_tick_count = 0;
 }
 
+#if RTOS_STACK_OVERFLOW_CHECK
 // ---------------------------------------------------------------------------
 // TEST-18: creating maximum tasks (tracking limit)
 // ---------------------------------------------------------------------------
@@ -1783,6 +1810,7 @@ static void test_max_tasks(void)
     g_ready_bitmap = 0;
     for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
 }
+#endif // RTOS_STACK_OVERFLOW_CHECK
 
 // ---------------------------------------------------------------------------
 // TEST-19: semaphore give_from_isr with waiter
@@ -1873,43 +1901,73 @@ void test_main(int argc, char *argv[])
     test_semaphore();
     test_mutex();
     test_queue();
+#if RTOS_ENABLE_SOFTWARE_TIMERS
     test_timers();
+#endif
+#if RTOS_ENABLE_TASK_NOTIFY
     test_task_notify();
+#endif
     test_delay_until();
     test_ok_tick_handler();
     test_ipc_timeout();
+#if RTOS_ENABLE_PRIORITY_INHERITANCE
     test_priority_inheritance();
+#endif
     test_tick_wraparound();
     test_queue_blocking_send();
+#if RTOS_ENABLE_TASK_SUSPEND
     test_ipc_suspend_cleanup();
+#endif
+#if RTOS_ENABLE_TASK_NOTIFY
     test_notify_wait_forever();
     test_notify_ipc_blocked();
+#endif
     test_blocked_list_wraparound();
     test_queue_recv_from_isr();
+#if RTOS_ENABLE_SOFTWARE_TIMERS
     test_timer_max_limit();
     test_timer_min_remaining();
+#endif
     test_task_inspection();
+#if RTOS_ENABLE_TASK_NOTIFY
     test_notify_clear();
+#endif
     test_sem_take_from_isr();
+#if RTOS_ENABLE_TASK_DELETE
     test_task_delete();
     test_task_delete_while_blocked();
+#endif
+#if RTOS_ENABLE_TASK_SUSPEND
     test_suspend_resume();
+#endif
     test_task_yield();
+#if RTOS_ENABLE_SOFTWARE_TIMERS
     test_timer_reset();
+#endif
+#if RTOS_STACK_OVERFLOW_CHECK
     test_check_stack();
+#endif
     test_stack_hwm();
     test_queue_send_isr_direct();
     test_context_switch();
     test_delay_zero();
     test_name_truncation();
+#if RTOS_ENABLE_TASK_SUSPEND && RTOS_ENABLE_PRIORITY_INHERITANCE
     test_setprio_blocked();
+#endif
+#if RTOS_ENABLE_TASK_NOTIFY
     test_notify_ipc_interaction();
     test_double_notify();
+#endif
     test_mutex_non_owner();
+#if RTOS_ENABLE_SOFTWARE_TIMERS
     test_timer_stop_from_callback();
+#endif
     test_idle_wakeup_ticks();
     test_isr_queue_with_waiters();
+#if RTOS_STACK_OVERFLOW_CHECK
     test_max_tasks();
+#endif
     test_sem_give_isr_waiter();
     test_task_handle_self();
 }
