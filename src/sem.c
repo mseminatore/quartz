@@ -141,9 +141,9 @@ void rtos_semaphore_give(rtos_handle_t handle)
 }
 
 //---------------------------------------------------------------------------
-// Give a semaphore from an ISR. Same behavior as xSemaphoreGive(), but does 
-// not call port_request_reschedule() — the caller is responsible for triggering 
-// a reschedule if a higher-priority task was unblocked.
+// Give a semaphore from an ISR. If a task is blocked waiting, it is made
+// ready and a reschedule is requested. Otherwise the count is incremented
+// (up to max_count).
 //---------------------------------------------------------------------------
 void rtos_semaphore_give_from_isr(rtos_handle_t handle)
 {
@@ -153,11 +153,10 @@ void rtos_semaphore_give_from_isr(rtos_handle_t handle)
     rtos_tcb_t *waiter = list_pop_head(&sem->wait_list);
     if (waiter) {
         rtos_task_make_ready(waiter);
+        port_request_reschedule();
     } else if (sem->count < sem->max_count) {
         sem->count++;
     }
-    // Caller is responsible for triggering a reschedule via port_request_reschedule()
-    // if a higher-priority task was unblocked.
 }
 
 //---------------------------------------------------------------------------

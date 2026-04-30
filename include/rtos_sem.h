@@ -28,7 +28,8 @@ int  rtos_semaphore_take(rtos_handle_t sem, rtos_tick_t timeout_ticks);
 // Give (increment). Unblocks the highest-priority waiter if any.
 void rtos_semaphore_give(rtos_handle_t sem);
 
-// ISR-safe Give. Does not reschedule; call port_request_reschedule() after if needed.
+// ISR-safe Give. Wakes a waiting task (and requests a reschedule) if one is
+// blocked; otherwise increments the count if below max.
 void rtos_semaphore_give_from_isr(rtos_handle_t sem);
 
 // ISR-safe Take. Non-blocking: returns RTOS_OK if a token was taken, RTOS_ERR

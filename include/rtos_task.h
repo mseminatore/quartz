@@ -125,8 +125,8 @@ rtos_handle_t rtos_task_handle_self(void);
 // waiting for a notification, it is unblocked immediately.
 void rtos_task_notify(rtos_handle_t task);
 
-// Send a notification from an ISR. Does not call port_request_reschedule();
-// the caller must trigger a reschedule if the target task has higher priority.
+// Send a notification from an ISR. If the target task is blocked waiting for
+// a notification, it is made ready and a reschedule is requested.
 void rtos_task_notify_from_isr(rtos_handle_t task);
 
 // Wait for a notification. Returns RTOS_OK when notified, RTOS_TIMEOUT if

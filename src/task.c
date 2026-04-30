@@ -519,8 +519,8 @@ void rtos_task_notify(rtos_handle_t task)
 }
 
 //---------------------------------------------------------------------------
-// Send a notification from an ISR. Does not trigger a reschedule — the
-// caller must call port_request_reschedule() if needed.
+// Send a notification from an ISR. If the target task is blocked waiting for
+// a notification, it is made ready and a reschedule is requested.
 //---------------------------------------------------------------------------
 void rtos_task_notify_from_isr(rtos_handle_t task)
 {
@@ -535,6 +535,7 @@ void rtos_task_notify_from_isr(rtos_handle_t task)
             tcb->ipc_wait = NULL;
         }
         rtos_task_make_ready(tcb);
+        port_request_reschedule();
     }
 }
 

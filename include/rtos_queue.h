@@ -36,6 +36,7 @@ int rtos_queue_send(rtos_handle_t queue, const void *item, rtos_tick_t timeout_t
 int rtos_queue_receive(rtos_handle_t queue, void *item, rtos_tick_t timeout_ticks);
 
 // ISR-safe Send. Returns RTOS_OK or RTOS_ERR (full). Does not block.
+// Wakes a blocked receiver (and requests a reschedule) if one is waiting.
 int rtos_queue_send_from_isr(rtos_handle_t queue, const void *item);
 
 // ISR-safe Receive. Returns RTOS_OK or RTOS_ERR (empty). Does not block.

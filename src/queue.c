@@ -185,9 +185,8 @@ int rtos_queue_receive(rtos_handle_t handle, void *item, rtos_tick_t timeout_tic
 }
 
 //---------------------------------------------------------------------------
-// Send an item to the queue from an ISR. Same behavior as xQueueSend(), but 
-// does not call port_request_reschedule() — the caller is responsible for 
-// triggering a reschedule if a higher-priority task was unblocked.
+// Send an item to the queue from an ISR. If a receiver is blocked waiting,
+// it is made ready and a reschedule is requested. Returns RTOS_ERR if full.
 //---------------------------------------------------------------------------
 int rtos_queue_send_from_isr(rtos_handle_t handle, const void *item)
 {
@@ -199,16 +198,18 @@ int rtos_queue_send_from_isr(rtos_handle_t handle, const void *item)
     q->count++;
 
     rtos_tcb_t *waiter = list_pop_head(&q->recv_wait);
-    if (waiter) rtos_task_make_ready(waiter);
+    if (waiter) {
+        rtos_task_make_ready(waiter);
+        port_request_reschedule();
+    }
 
     return RTOS_OK;
 }
 
 //---------------------------------------------------------------------------
 // Receive an item from the queue from an ISR. Returns RTOS_ERR if the queue
-// is empty. Does not block. Unblocks a waiting sender if one is present —
-// the caller is responsible for calling port_request_reschedule() if a
-// higher-priority task was made ready.
+// is empty. Does not block. Unblocks a waiting sender if one is present and
+// requests a reschedule.
 //---------------------------------------------------------------------------
 int rtos_queue_receive_from_isr(rtos_handle_t handle, void *item)
 {
@@ -220,7 +221,10 @@ int rtos_queue_receive_from_isr(rtos_handle_t handle, void *item)
     q->count--;
 
     rtos_tcb_t *waiter = list_pop_head(&q->send_wait);
-    if (waiter) rtos_task_make_ready(waiter);
+    if (waiter) {
+        rtos_task_make_ready(waiter);
+        port_request_reschedule();
+    }
 
     return RTOS_OK;
 }
