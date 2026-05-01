@@ -141,7 +141,7 @@ int rtos_mutex_lock(rtos_handle_t handle, rtos_tick_t timeout_ticks)
         held_push(mutex->owner, mutex);
 #endif
         port_exit_critical();
-        RTOS_TRACE_MUTEX_LOCK(mutex);
+        RTOS_TRACE_MUTEX_LOCK(mutex, 1, 0);
         return RTOS_OK;
     }
 
@@ -153,8 +153,9 @@ int rtos_mutex_lock(rtos_handle_t handle, rtos_tick_t timeout_ticks)
             return RTOS_ERR;  // would overflow
         }
         mutex->nest_count++;
+        uint32_t nest = mutex->nest_count;
         port_exit_critical();
-        RTOS_TRACE_MUTEX_LOCK(mutex);
+        RTOS_TRACE_MUTEX_LOCK(mutex, nest, 0);
         return RTOS_OK;
     }
 #endif
@@ -210,7 +211,7 @@ int rtos_mutex_lock(rtos_handle_t handle, rtos_tick_t timeout_ticks)
     port_exit_critical();
 
     if (on_list || notified) return RTOS_TIMEOUT;
-    RTOS_TRACE_MUTEX_LOCK(mutex);
+    RTOS_TRACE_MUTEX_LOCK(mutex, 1, 1);
     return RTOS_OK;
 }
 
@@ -238,8 +239,9 @@ int rtos_mutex_unlock(rtos_handle_t handle)
     if (mutex->recursive) {
         if (mutex->nest_count > 1) {
             mutex->nest_count--;
+            uint32_t nest = mutex->nest_count;
             port_exit_critical();
-            RTOS_TRACE_MUTEX_UNLOCK(mutex);
+            RTOS_TRACE_MUTEX_UNLOCK(mutex, nest, 0);
             return RTOS_OK;
         }
         mutex->nest_count = 0;
@@ -274,8 +276,9 @@ int rtos_mutex_unlock(rtos_handle_t handle)
     apply_effective_priority(self, recompute_effective_priority(self));
 #endif
 
+    uint32_t woke = (waiter != NULL) ? 1u : 0u;
     port_exit_critical();
-    RTOS_TRACE_MUTEX_UNLOCK(mutex);
+    RTOS_TRACE_MUTEX_UNLOCK(mutex, 0, woke);
     port_request_reschedule();
     return RTOS_OK;
 }

@@ -66,9 +66,11 @@ int rtos_queue_send(rtos_handle_t handle, const void *item, rtos_tick_t timeout_
         rtos_tcb_t *waiter = list_pop_head(&q->recv_wait);
         if (waiter) rtos_task_make_ready(waiter);
 
+        uint32_t cnt = (uint32_t)q->count;
+        uint32_t woke = (waiter != NULL) ? 1u : 0u;
         port_exit_critical();
         port_request_reschedule();
-        RTOS_TRACE_QUEUE_SEND(q);
+        RTOS_TRACE_QUEUE_SEND(q, cnt, woke);
         return RTOS_OK;
     }
 
@@ -89,6 +91,8 @@ int rtos_queue_send(rtos_handle_t handle, const void *item, rtos_tick_t timeout_
 
     port_enter_critical();
     int on_list = list_remove(&q->send_wait, self);
+    int traced_send = 0;
+    uint32_t traced_send_count = 0, traced_send_woke = 0;
     if (on_list) {
         rtos_task_blocked_remove(self);
 #if RTOS_ENABLE_TASK_NOTIFY
@@ -103,10 +107,12 @@ int rtos_queue_send(rtos_handle_t handle, const void *item, rtos_tick_t timeout_
         rtos_kmemcpy(q->buf + q->tail * q->item_size, item, q->item_size);
         q->tail = (q->tail + 1) % q->capacity;
         q->count++;
-        RTOS_TRACE_QUEUE_SEND(q);
+        traced_send_count = (uint32_t)q->count;
         // Unblock a receiver that may have started waiting in the meantime.
         rtos_tcb_t *waiter = list_pop_head(&q->recv_wait);
         if (waiter) rtos_task_make_ready(waiter);
+        traced_send_woke = (waiter != NULL) ? 1u : 0u;
+        traced_send = 1;
     } else {
         // The free slot was filled by another task before we re-entered the
         // critical section. Treat as a failed send (caller should retry).
@@ -115,6 +121,7 @@ int rtos_queue_send(rtos_handle_t handle, const void *item, rtos_tick_t timeout_
     self->ipc_wait = NULL;
     port_exit_critical();
 
+    if (traced_send) RTOS_TRACE_QUEUE_SEND(q, traced_send_count, traced_send_woke);
     return on_list ? RTOS_TIMEOUT : RTOS_OK;
 }
 
@@ -142,9 +149,11 @@ int rtos_queue_receive(rtos_handle_t handle, void *item, rtos_tick_t timeout_tic
         rtos_tcb_t *waiter = list_pop_head(&q->send_wait);
         if (waiter) rtos_task_make_ready(waiter);
 
+        uint32_t cnt = (uint32_t)q->count;
+        uint32_t woke = (waiter != NULL) ? 1u : 0u;
         port_exit_critical();
         port_request_reschedule();
-        RTOS_TRACE_QUEUE_RECEIVE(q);
+        RTOS_TRACE_QUEUE_RECEIVE(q, cnt, woke);
         return RTOS_OK;
     }
 
@@ -165,6 +174,8 @@ int rtos_queue_receive(rtos_handle_t handle, void *item, rtos_tick_t timeout_tic
 
     port_enter_critical();
     int on_list = list_remove(&q->recv_wait, self);
+    int traced_recv = 0;
+    uint32_t traced_recv_count = 0, traced_recv_woke = 0;
     if (on_list) {
         rtos_task_blocked_remove(self);
 #if RTOS_ENABLE_TASK_NOTIFY
@@ -178,14 +189,17 @@ int rtos_queue_receive(rtos_handle_t handle, void *item, rtos_tick_t timeout_tic
         rtos_kmemcpy(item, q->buf + q->head * q->item_size, q->item_size);
         q->head = (q->head + 1) % q->capacity;
         q->count--;
-        RTOS_TRACE_QUEUE_RECEIVE(q);
+        traced_recv_count = (uint32_t)q->count;
         // Unblock a sender that may have been waiting for space
         rtos_tcb_t *waiter = list_pop_head(&q->send_wait);
         if (waiter) rtos_task_make_ready(waiter);
+        traced_recv_woke = (waiter != NULL) ? 1u : 0u;
+        traced_recv = 1;
     }
     self->ipc_wait = NULL;
     port_exit_critical();
 
+    if (traced_recv) RTOS_TRACE_QUEUE_RECEIVE(q, traced_recv_count, traced_recv_woke);
     return on_list ? RTOS_TIMEOUT : RTOS_OK;
 }
 
@@ -201,7 +215,6 @@ int rtos_queue_send_from_isr(rtos_handle_t handle, const void *item)
     rtos_kmemcpy(q->buf + q->tail * q->item_size, item, q->item_size);
     q->tail = (q->tail + 1) % q->capacity;
     q->count++;
-    RTOS_TRACE_QUEUE_SEND(q);
 
     rtos_tcb_t *waiter = list_pop_head(&q->recv_wait);
     if (waiter) {
@@ -209,6 +222,7 @@ int rtos_queue_send_from_isr(rtos_handle_t handle, const void *item)
         port_request_reschedule();
     }
 
+    RTOS_TRACE_QUEUE_SEND(q, (uint32_t)q->count, (waiter != NULL) ? 1u : 0u);
     return RTOS_OK;
 }
 
@@ -225,13 +239,14 @@ int rtos_queue_receive_from_isr(rtos_handle_t handle, void *item)
     rtos_kmemcpy(item, q->buf + q->head * q->item_size, q->item_size);
     q->head = (q->head + 1) % q->capacity;
     q->count--;
-    RTOS_TRACE_QUEUE_RECEIVE(q);
 
     rtos_tcb_t *waiter = list_pop_head(&q->send_wait);
     if (waiter) {
         rtos_task_make_ready(waiter);
         port_request_reschedule();
     }
+
+    RTOS_TRACE_QUEUE_RECEIVE(q, (uint32_t)q->count, (waiter != NULL) ? 1u : 0u);
 
     return RTOS_OK;
 }
@@ -339,9 +354,11 @@ int rtos_queue_send_to_front(rtos_handle_t handle, const void *item, rtos_tick_t
         rtos_tcb_t *waiter = list_pop_head(&q->recv_wait);
         if (waiter) rtos_task_make_ready(waiter);
 
+        uint32_t cnt = (uint32_t)q->count;
+        uint32_t woke = (waiter != NULL) ? 1u : 0u;
         port_exit_critical();
         port_request_reschedule();
-        RTOS_TRACE_QUEUE_SEND(q);
+        RTOS_TRACE_QUEUE_SEND(q, cnt, woke);
         return RTOS_OK;
     }
 
@@ -361,6 +378,8 @@ int rtos_queue_send_to_front(rtos_handle_t handle, const void *item, rtos_tick_t
 
     port_enter_critical();
     int on_list = list_remove(&q->send_wait, self);
+    int traced_send = 0;
+    uint32_t traced_send_count = 0, traced_send_woke = 0;
     if (on_list) {
         rtos_task_blocked_remove(self);
 #if RTOS_ENABLE_TASK_NOTIFY
@@ -369,14 +388,17 @@ int rtos_queue_send_to_front(rtos_handle_t handle, const void *item, rtos_tick_t
 #endif
     } else if (q->count < q->capacity) {
         queue_write_front(q, item);
-        RTOS_TRACE_QUEUE_SEND(q);
+        traced_send_count = (uint32_t)q->count;
         rtos_tcb_t *waiter = list_pop_head(&q->recv_wait);
         if (waiter) rtos_task_make_ready(waiter);
+        traced_send_woke = (waiter != NULL) ? 1u : 0u;
+        traced_send = 1;
     } else {
         on_list = 1;
     }
     self->ipc_wait = NULL;
     port_exit_critical();
 
+    if (traced_send) RTOS_TRACE_QUEUE_SEND(q, traced_send_count, traced_send_woke);
     return on_list ? RTOS_TIMEOUT : RTOS_OK;
 }

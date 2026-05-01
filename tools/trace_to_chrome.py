@@ -92,13 +92,32 @@ def parse(buf: bytes):
     return names, records
 
 
+# Width (microseconds) of the synthetic IPC bar.  Big enough to be selectable
+# in chrome://tracing without dominating realistic kernel-scale time spans.
+IPC_BAR_US = 50
+
+# Per-event-type labels for the (aux1, aux2) record fields.  See trace_chrome.c
+# call sites for the kernel-side meaning.
+AUX_LABELS = {
+    EV_SEM_TAKE:      ("count", "blocked"),
+    EV_SEM_GIVE:      ("count", "woke_waiter"),
+    EV_MUTEX_LOCK:    ("nest_count", "blocked"),
+    EV_MUTEX_UNLOCK:  ("nest_count", "woke_waiter"),
+    EV_QUEUE_SEND:    ("count", "woke_receiver"),
+    EV_QUEUE_RECEIVE: ("count", "woke_sender"),
+}
+
+
 def emit_chrome(names, records):
     pid = 1
     events = []
 
-    # Assign each known task its own thread id (= lane in chrome://tracing).
-    # A separate lane "events" hosts IPC instants so they don't visually clip
-    # the task slices.  Lower tid = higher row in the viewer.
+    # Each known task gets two adjacent lanes:
+    #   running lane (tid)         — `running` slices, sort_index = 2*N
+    #   IPC sub-lane (tid + 1000)  — `ph:"X"` IPC bars,  sort_index = 2*N + 1
+    # The +1000 offset gives plenty of room to keep them distinct from the
+    # running tids.  An auxiliary "events" lane catches IPC events that fire
+    # before any task is on-CPU.
     task_tid = {}
     next_tid = 1
     for hid, info in names.items():
@@ -106,16 +125,27 @@ def emit_chrome(names, records):
             task_tid[info["name"]] = next_tid
             next_tid += 1
     EVENTS_TID = 100
+    IPC_TID_OFFSET = 1000  # IPC sub-lane tid = task tid + 1000
 
     events.append({"name": "process_name", "ph": "M", "pid": pid, "tid": 1,
                    "args": {"name": "rtos"}})
-    for tname, tid in task_tid.items():
+
+    def add_task_lane_metadata(tname: str, tid: int):
+        # running lane
         events.append({"name": "thread_name", "ph": "M", "pid": pid, "tid": tid,
                        "args": {"name": tname}})
-        # sort_index orders the lanes; tasks first, "events" last.
         events.append({"name": "thread_sort_index", "ph": "M", "pid": pid,
-                       "tid": tid, "args": {"sort_index": tid}})
-    # The "events" lane is added lazily — only if at least one IPC instant
+                       "tid": tid, "args": {"sort_index": tid * 2}})
+        # adjacent IPC sub-lane (sorted right under its task's running lane)
+        ipc_tid = tid + IPC_TID_OFFSET
+        events.append({"name": "thread_name", "ph": "M", "pid": pid,
+                       "tid": ipc_tid, "args": {"name": f"{tname}/IPC"}})
+        events.append({"name": "thread_sort_index", "ph": "M", "pid": pid,
+                       "tid": ipc_tid, "args": {"sort_index": tid * 2 + 1}})
+
+    for tname, tid in task_tid.items():
+        add_task_lane_metadata(tname, tid)
+    # The "events" lane is added lazily — only if at least one IPC event
     # actually lands there (i.e. fired before any task was running).
     events_lane_used = False
 
@@ -129,8 +159,7 @@ def emit_chrome(names, records):
         if name not in task_tid:
             nonlocal next_tid
             task_tid[name] = next_tid
-            events.append({"name": "thread_name", "ph": "M", "pid": pid,
-                           "tid": next_tid, "args": {"name": name}})
+            add_task_lane_metadata(name, next_tid)
             next_tid += 1
         return task_tid[name]
 
@@ -160,30 +189,26 @@ def emit_chrome(names, records):
         else:
             label = EVENT_NAMES.get(t, f"ev{t}")
             target = hname(r["hid"])
-            # Put the instant on the current task's lane so it's visually
-            # associated with whoever caused it; fall back to the events lane
-            # if no task is running yet.
+            # IPC events emit as ph:"X" complete events on the originating
+            # task's IPC sub-lane (selectable bars in both viewers).  If no
+            # task is running yet the event lands on the shared events lane.
             if current_tid is not None:
-                tid = current_tid
+                tid = current_tid + IPC_TID_OFFSET
             else:
                 tid = EVENTS_TID
                 events_lane_used = True
-            events.append({"ph": "i", "s": "t", "pid": pid, "tid": tid,
-                           "ts": r["ts"], "name": f"{label}({target})",
+            a1_lbl, a2_lbl = AUX_LABELS.get(t, ("aux1", "aux2"))
+            events.append({"ph": "X", "pid": pid, "tid": tid,
+                           "ts": r["ts"], "dur": IPC_BAR_US,
+                           "name": f"{label}({target})",
                            "args": {"handle": target, "by_task": current,
-                                    "aux1": r["aux1"], "aux2": r["aux2"]}})
+                                    a1_lbl: r["aux1"], a2_lbl: r["aux2"]}})
 
     if events_lane_used:
         events.append({"name": "thread_name", "ph": "M", "pid": pid,
                        "tid": EVENTS_TID, "args": {"name": "events"}})
         events.append({"name": "thread_sort_index", "ph": "M", "pid": pid,
                        "tid": EVENTS_TID, "args": {"sort_index": EVENTS_TID}})
-
-    # Chrome Trace Event Format only accepts "ms" (default) or "ns" for
-    # displayTimeUnit.  Our `ts` values are integer microseconds (the format's
-    # required unit regardless of displayTimeUnit), so "ns" keeps full
-    # sub-millisecond resolution in the viewer.
-    return {"traceEvents": events, "displayTimeUnit": "ns"}
 
     # Chrome Trace Event Format only accepts "ms" (default) or "ns" for
     # displayTimeUnit.  Our `ts` values are integer microseconds (the format's

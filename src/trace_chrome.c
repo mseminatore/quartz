@@ -72,7 +72,7 @@ static uint16_t lookup_or_assign(void *handle, const char *name, int is_task)
     return e->id;
 }
 
-static void emit(uint8_t type, uint16_t id, uint8_t flags, uint32_t aux1)
+static void emit(uint8_t type, uint16_t id, uint8_t flags, uint32_t aux1, uint32_t aux2)
 {
     rtos_trace_record_t *r = &g_ring[g_head];
     r->timestamp_us = port_timestamp_us();
@@ -80,7 +80,7 @@ static void emit(uint8_t type, uint16_t id, uint8_t flags, uint32_t aux1)
     r->type         = type;
     r->flags        = flags;
     r->aux1         = aux1;
-    r->aux2         = 0;
+    r->aux2         = aux2;
 
     g_head = (g_head + 1) % RTOS_TRACE_RECORD_CAPACITY;
     if (g_count < RTOS_TRACE_RECORD_CAPACITY) {
@@ -98,7 +98,7 @@ void rtos_trace_task_create(rtos_tcb_t *tcb)
     if (!tcb) return;
     port_enter_critical();
     uint16_t id = lookup_or_assign(tcb, tcb->name, 1);
-    emit(RTOS_TRACE_EV_TASK_CREATE, id, 1, tcb->priority);
+    emit(RTOS_TRACE_EV_TASK_CREATE, id, 1, tcb->priority, 0);
     port_exit_critical();
 }
 
@@ -107,7 +107,7 @@ void rtos_trace_task_delete(rtos_tcb_t *tcb)
     if (!tcb) return;
     port_enter_critical();
     uint16_t id = lookup_or_assign(tcb, tcb->name, 1);
-    emit(RTOS_TRACE_EV_TASK_DELETE, id, 1, tcb->priority);
+    emit(RTOS_TRACE_EV_TASK_DELETE, id, 1, tcb->priority, 0);
     port_exit_critical();
 }
 
@@ -116,7 +116,7 @@ void rtos_trace_task_switched_in(rtos_tcb_t *tcb)
     if (!tcb) return;
     port_enter_critical();
     uint16_t id = lookup_or_assign(tcb, tcb->name, 1);
-    emit(RTOS_TRACE_EV_TASK_SWITCH_IN, id, 1, tcb->priority);
+    emit(RTOS_TRACE_EV_TASK_SWITCH_IN, id, 1, tcb->priority, 0);
     port_exit_critical();
 }
 
@@ -125,16 +125,16 @@ void rtos_trace_task_switched_out(rtos_tcb_t *tcb)
     if (!tcb) return;
     port_enter_critical();
     uint16_t id = lookup_or_assign(tcb, tcb->name, 1);
-    emit(RTOS_TRACE_EV_TASK_SWITCH_OUT, id, 1, tcb->priority);
+    emit(RTOS_TRACE_EV_TASK_SWITCH_OUT, id, 1, tcb->priority, 0);
     port_exit_critical();
 }
 
-#define DEFINE_OBJ_HOOK(fn, ev)                                  \
-    void fn(void *handle) {                                      \
-        port_enter_critical();                                   \
-        uint16_t id = lookup_or_assign(handle, NULL, 0);         \
-        emit((ev), id, 0, 0);                                    \
-        port_exit_critical();                                    \
+#define DEFINE_OBJ_HOOK(fn, ev)                                       \
+    void fn(void *handle, uint32_t aux1, uint32_t aux2) {             \
+        port_enter_critical();                                        \
+        uint16_t id = lookup_or_assign(handle, NULL, 0);              \
+        emit((ev), id, 0, aux1, aux2);                                \
+        port_exit_critical();                                         \
     }
 
 DEFINE_OBJ_HOOK(rtos_trace_sem_take,      RTOS_TRACE_EV_SEM_TAKE)
@@ -143,7 +143,14 @@ DEFINE_OBJ_HOOK(rtos_trace_mutex_lock,    RTOS_TRACE_EV_MUTEX_LOCK)
 DEFINE_OBJ_HOOK(rtos_trace_mutex_unlock,  RTOS_TRACE_EV_MUTEX_UNLOCK)
 DEFINE_OBJ_HOOK(rtos_trace_queue_send,    RTOS_TRACE_EV_QUEUE_SEND)
 DEFINE_OBJ_HOOK(rtos_trace_queue_receive, RTOS_TRACE_EV_QUEUE_RECEIVE)
-DEFINE_OBJ_HOOK(rtos_trace_timer_fire,    RTOS_TRACE_EV_TIMER_FIRE)
+
+void rtos_trace_timer_fire(void *handle)
+{
+    port_enter_critical();
+    uint16_t id = lookup_or_assign(handle, NULL, 0);
+    emit(RTOS_TRACE_EV_TIMER_FIRE, id, 0, 0, 0);
+    port_exit_critical();
+}
 
 // ---------------------------------------------------------------------------
 // Public introspection / drain API

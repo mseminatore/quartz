@@ -69,8 +69,9 @@ int rtos_semaphore_take(rtos_handle_t handle, rtos_tick_t timeout_ticks)
 
     if (sem->count > 0) {
         sem->count--;
+        uint32_t cnt = sem->count;
         port_exit_critical();
-        RTOS_TRACE_SEM_TAKE(sem);
+        RTOS_TRACE_SEM_TAKE(sem, cnt, 0);
         return RTOS_OK;
     }
 
@@ -106,10 +107,11 @@ int rtos_semaphore_take(rtos_handle_t handle, rtos_tick_t timeout_ticks)
     int notified = 0;
 #endif
     self->ipc_wait = NULL;
+    uint32_t cnt = sem->count;
     port_exit_critical();
 
     if (on_list || notified) return RTOS_TIMEOUT;
-    RTOS_TRACE_SEM_TAKE(sem);
+    RTOS_TRACE_SEM_TAKE(sem, cnt, 1);
     return RTOS_OK;
 }
 
@@ -137,8 +139,10 @@ void rtos_semaphore_give(rtos_handle_t handle)
         sem->count++;
     }
 
+    uint32_t cnt = sem->count;
+    uint32_t woke = (waiter != NULL) ? 1u : 0u;
     port_exit_critical();
-    RTOS_TRACE_SEM_GIVE(sem);
+    RTOS_TRACE_SEM_GIVE(sem, cnt, woke);
     port_request_reschedule();
 }
 
@@ -159,7 +163,7 @@ void rtos_semaphore_give_from_isr(rtos_handle_t handle)
     } else if (sem->count < sem->max_count) {
         sem->count++;
     }
-    RTOS_TRACE_SEM_GIVE(sem);
+    RTOS_TRACE_SEM_GIVE(sem, sem->count, (waiter != NULL) ? 1u : 0u);
 }
 
 //---------------------------------------------------------------------------
@@ -174,7 +178,7 @@ int rtos_semaphore_take_from_isr(rtos_handle_t handle)
 
     if (sem->count > 0) {
         sem->count--;
-        RTOS_TRACE_SEM_TAKE(sem);
+        RTOS_TRACE_SEM_TAKE(sem, sem->count, 0);
         return RTOS_OK;
     }
     return RTOS_ERR;

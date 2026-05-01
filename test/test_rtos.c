@@ -2397,12 +2397,12 @@ static void test_trace_chrome(void)
 
     rtos_trace_task_create(&fake);
     rtos_trace_task_switched_in(&fake);
-    rtos_trace_sem_take((void *)0x1000);
-    rtos_trace_sem_give((void *)0x1000);
-    rtos_trace_mutex_lock((void *)0x2000);
-    rtos_trace_mutex_unlock((void *)0x2000);
-    rtos_trace_queue_send((void *)0x3000);
-    rtos_trace_queue_receive((void *)0x3000);
+    rtos_trace_sem_take((void *)0x1000, 0, 0);
+    rtos_trace_sem_give((void *)0x1000, 0, 0);
+    rtos_trace_mutex_lock((void *)0x2000, 0, 0);
+    rtos_trace_mutex_unlock((void *)0x2000, 0, 0);
+    rtos_trace_queue_send((void *)0x3000, 0, 0);
+    rtos_trace_queue_receive((void *)0x3000, 0, 0);
     rtos_trace_timer_fire((void *)0x4000);
     rtos_trace_task_switched_out(&fake);
 
@@ -2425,7 +2425,7 @@ static void test_trace_chrome(void)
     // Overflow detection: write more than capacity records
     rtos_trace_chrome_reset();
     for (size_t i = 0; i < (RTOS_TRACE_BUFFER_BYTES / 16) + 5; ++i) {
-        rtos_trace_sem_take((void *)0x100);
+        rtos_trace_sem_take((void *)0x100, 0, 0);
     }
     TEST(rtos_trace_chrome_overflowed());
     TEST(rtos_trace_chrome_count() == (RTOS_TRACE_BUFFER_BYTES / 16));

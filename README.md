@@ -380,25 +380,37 @@ in `chrome://tracing` or [Perfetto UI](https://ui.perfetto.dev).
 
 ### How to read the visualization
 
-Each row in the timeline is one RTOS task (plus an `events` row for IPC
-calls that fire before the scheduler starts):
+Each task gets **two adjacent lanes**: a `running` lane and an `IPC`
+sub-lane immediately under it.
 
-| Lane         | What it shows                                                       |
-|--------------|---------------------------------------------------------------------|
+| Lane                              | What it shows                                                       |
+|-----------------------------------|---------------------------------------------------------------------|
 | `producer`, `consumer`, `idle`, … | One row per task (the `name` you passed to `rtos_task_create`). A coloured bar named **`running`** spans every interval that this task was on-CPU. Click a bar to see its priority. |
-| `events`     | Holds any IPC instant that occurred before the first task switch (rare).      |
+| `producer/IPC`, `consumer/IPC`, … | IPC bars (`sem_take`, `sem_give`, `mutex_lock`, `mutex_unlock`, `queue_send`, `queue_recv`, `timer_fire`) attributed to whichever task was running when the call happened. Each bar carries event-specific args (see below). |
+| `events`                          | Lazily added; holds any IPC event that occurred before the first task switch (rare). |
 
-Vertical tick marks **on a task's row** are IPC instants (`sem_take`,
-`sem_give`, `mutex_lock`, `mutex_unlock`, `queue_send`, `queue_recv`,
-`timer_fire`) attributed to whichever task was running when the call
-happened. Click a tick to see the handle name and aux args.
+IPC bars have a fixed synthetic width (50 µs) so they remain selectable in
+both `chrome://tracing` and Perfetto. Their **start timestamp** is the
+exact microsecond the kernel call completed; the width is purely visual
+and **does not** represent how long the call took.
+
+Click an IPC bar to inspect its `args`:
+
+| Event          | `args` keys                                |
+|----------------|--------------------------------------------|
+| `sem_take`     | `count` (after take), `blocked` (1 if waited) |
+| `sem_give`     | `count` (after give), `woke_waiter`        |
+| `mutex_lock`   | `nest_count`, `blocked`                    |
+| `mutex_unlock` | `nest_count` (after unlock), `woke_waiter` |
+| `queue_send`   | `count` (after send), `woke_receiver`      |
+| `queue_recv`   | `count` (after recv), `woke_sender`        |
 
 Reading the layout:
 
-- **Gaps** in a task's row = the task was blocked or pre-empted.
-- A bar in `idle` = no other task was ready (the system is idle).
-- A bar appearing in one task immediately followed by another = a context
-  switch; the timestamps are exact (microsecond resolution).
+- **Gaps** in a task's `running` row = the task was blocked or pre-empted.
+- A bar in `idle/running` = no other task was ready (the system is idle).
+- A bar appearing in one task's `running` immediately followed by another
+  = a context switch; the timestamps are exact (microsecond resolution).
 - Use **W**/**S** in `chrome://tracing` to zoom, **A**/**D** to pan.
 
 ### Capturing a chrome trace from a Pico W via the Debug Probe
