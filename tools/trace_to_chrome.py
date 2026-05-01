@@ -210,6 +210,29 @@ def emit_chrome(names, records):
         events.append({"name": "thread_sort_index", "ph": "M", "pid": pid,
                        "tid": EVENTS_TID, "args": {"sort_index": EVENTS_TID}})
 
+    # Per-IPC-sub-lane post-processing:
+    #   1. Nudge simultaneous events forward by 1 µs each so they don't stack
+    #      (host ports have µs-resolution timestamps, so back-to-back kernel
+    #      calls inside one task body can land in the same microsecond — which
+    #      would force chrome://tracing to render them on stacked sub-tracks
+    #      and add an inconsistent collapse arrow only on the affected lane).
+    #   2. Clamp each bar's dur so it never overlaps the next bar on the same
+    #      lane (target IPC_BAR_US, floor 1 µs).
+    by_tid = {}
+    for e in events:
+        if e.get("ph") == "X":
+            by_tid.setdefault(e["tid"], []).append(e)
+    for tid_evs in by_tid.values():
+        tid_evs.sort(key=lambda e: e["ts"])
+        for i in range(1, len(tid_evs)):
+            if tid_evs[i]["ts"] <= tid_evs[i - 1]["ts"]:
+                tid_evs[i]["ts"] = tid_evs[i - 1]["ts"] + 1
+        for i, e in enumerate(tid_evs):
+            if i + 1 < len(tid_evs):
+                gap = tid_evs[i + 1]["ts"] - e["ts"]
+                if gap < e["dur"]:
+                    e["dur"] = max(1, gap)
+
     # Chrome Trace Event Format only accepts "ms" (default) or "ns" for
     # displayTimeUnit.  Our `ts` values are integer microseconds (the format's
     # required unit regardless of displayTimeUnit), so "ns" keeps full

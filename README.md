@@ -389,10 +389,13 @@ sub-lane immediately under it.
 | `producer/IPC`, `consumer/IPC`, … | IPC bars (`sem_take`, `sem_give`, `mutex_lock`, `mutex_unlock`, `queue_send`, `queue_recv`, `timer_fire`) attributed to whichever task was running when the call happened. Each bar carries event-specific args (see below). |
 | `events`                          | Lazily added; holds any IPC event that occurred before the first task switch (rare). |
 
-IPC bars have a fixed synthetic width (50 µs) so they remain selectable in
-both `chrome://tracing` and Perfetto. Their **start timestamp** is the
-exact microsecond the kernel call completed; the width is purely visual
-and **does not** represent how long the call took.
+IPC bars have a target width of 50 µs so they remain selectable in both
+`chrome://tracing` and Perfetto. The decoder automatically shrinks the bar
+when the next IPC event on the same sub-lane is closer (floor 1 µs), and
+nudges truly simultaneous events forward by 1 µs each so bars never visually
+overlap or stack. The **start timestamp** is the exact microsecond the kernel
+call completed (within ±1 µs after the simultaneous-event nudge); the width
+is purely visual and **does not** represent how long the call took.
 
 Click an IPC bar to inspect its `args`:
 
