@@ -191,6 +191,12 @@ elseif(RTOS_TARGET_CM4)
     if(DEFINED RTOS_BASEPRI_VALUE)
         target_compile_definitions(rtos PRIVATE RTOS_BASEPRI_VALUE=${RTOS_BASEPRI_VALUE})
     endif()
+    # Propagate the FPU knob to both C and ASM (port_asm.S guards on it).
+    # CMake routes target_compile_definitions to all language drivers, so this
+    # reaches the assembler without us having to #include rtos_config.h from .S.
+    if(RTOS_CM4_FPU)
+        target_compile_definitions(rtos PUBLIC RTOS_CM4_FPU=1)
+    endif()
 endif()
 
 # Pass optional debug/instrumentation overrides from the parent project.

@@ -27,7 +27,9 @@
 // TCB layout (must match rtos_tcb_t in rtos_task.h):
 //   offset 0: sp (void *)  — the only field touched by this assembly.
 
-#include "rtos_config.h"
+// RTOS_CM4_FPU is propagated from CMakeLists.txt via target_compile_definitions
+// (we deliberately do *not* #include rtos_config.h here, since the assembler
+// cannot parse the C typedefs it transitively includes from <stdint.h>).
 
     .syntax unified
     .thumb

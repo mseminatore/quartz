@@ -4,9 +4,9 @@
 // Message queue implementation (fixed-size items, static circular buffer).
 //---------------------------------------------------------------------------
 #include <stdint.h>
-#include <string.h>
 #include "../include/rtos_queue.h"
 #include "../include/rtos_trace.h"
+#include "kmem.h"
 #include "list.h"
 #include "port.h"
 
@@ -58,7 +58,7 @@ int rtos_queue_send(rtos_handle_t handle, const void *item, rtos_tick_t timeout_
     port_enter_critical();
 
     if (q->count < q->capacity) {
-        memcpy(q->buf + q->tail * q->item_size, item, q->item_size);
+        rtos_kmemcpy(q->buf + q->tail * q->item_size, item, q->item_size);
         q->tail = (q->tail + 1) % q->capacity;
         q->count++;
 
@@ -100,7 +100,7 @@ int rtos_queue_send(rtos_handle_t handle, const void *item, rtos_tick_t timeout_
 #endif
     } else if (q->count < q->capacity) {
         // We were woken because a receiver made space; complete the send now.
-        memcpy(q->buf + q->tail * q->item_size, item, q->item_size);
+        rtos_kmemcpy(q->buf + q->tail * q->item_size, item, q->item_size);
         q->tail = (q->tail + 1) % q->capacity;
         q->count++;
         RTOS_TRACE_QUEUE_SEND(q);
@@ -134,7 +134,7 @@ int rtos_queue_receive(rtos_handle_t handle, void *item, rtos_tick_t timeout_tic
     port_enter_critical();
 
     if (q->count > 0) {
-        memcpy(item, q->buf + q->head * q->item_size, q->item_size);
+        rtos_kmemcpy(item, q->buf + q->head * q->item_size, q->item_size);
         q->head = (q->head + 1) % q->capacity;
         q->count--;
 
@@ -175,7 +175,7 @@ int rtos_queue_receive(rtos_handle_t handle, void *item, rtos_tick_t timeout_tic
         on_list = 1;
 #endif
     } else if (q->count > 0) {
-        memcpy(item, q->buf + q->head * q->item_size, q->item_size);
+        rtos_kmemcpy(item, q->buf + q->head * q->item_size, q->item_size);
         q->head = (q->head + 1) % q->capacity;
         q->count--;
         RTOS_TRACE_QUEUE_RECEIVE(q);
@@ -198,7 +198,7 @@ int rtos_queue_send_from_isr(rtos_handle_t handle, const void *item)
     rtos_queue_t *q = (rtos_queue_t *)handle;
     if (!q || !item || q->count >= q->capacity) return RTOS_ERR;
 
-    memcpy(q->buf + q->tail * q->item_size, item, q->item_size);
+    rtos_kmemcpy(q->buf + q->tail * q->item_size, item, q->item_size);
     q->tail = (q->tail + 1) % q->capacity;
     q->count++;
     RTOS_TRACE_QUEUE_SEND(q);
@@ -222,7 +222,7 @@ int rtos_queue_receive_from_isr(rtos_handle_t handle, void *item)
     rtos_queue_t *q = (rtos_queue_t *)handle;
     if (!q || !item || q->count == 0) return RTOS_ERR;
 
-    memcpy(item, q->buf + q->head * q->item_size, q->item_size);
+    rtos_kmemcpy(item, q->buf + q->head * q->item_size, q->item_size);
     q->head = (q->head + 1) % q->capacity;
     q->count--;
     RTOS_TRACE_QUEUE_RECEIVE(q);
@@ -270,7 +270,7 @@ int rtos_queue_peek(rtos_handle_t handle, void *item, rtos_tick_t timeout_ticks)
     port_enter_critical();
 
     if (q->count > 0) {
-        memcpy(item, q->buf + q->head * q->item_size, q->item_size);
+        rtos_kmemcpy(item, q->buf + q->head * q->item_size, q->item_size);
         port_exit_critical();
         return RTOS_OK;
     }
@@ -299,7 +299,7 @@ int rtos_queue_peek(rtos_handle_t handle, void *item, rtos_tick_t timeout_ticks)
         on_list = 1;
 #endif
     } else if (q->count > 0) {
-        memcpy(item, q->buf + q->head * q->item_size, q->item_size);
+        rtos_kmemcpy(item, q->buf + q->head * q->item_size, q->item_size);
         // Re-arm the next receiver so the visible item still has a consumer
         // path. (We were popped as the receiver but didn't consume; wake any
         // other waiter so they may receive.)
@@ -322,7 +322,7 @@ static void queue_write_front(rtos_queue_t *q, const void *item)
 {
     // Move head one slot back (with wrap), then write into that slot.
     q->head = (q->head == 0) ? (q->capacity - 1) : (q->head - 1);
-    memcpy(q->buf + q->head * q->item_size, item, q->item_size);
+    rtos_kmemcpy(q->buf + q->head * q->item_size, item, q->item_size);
     q->count++;
 }
 

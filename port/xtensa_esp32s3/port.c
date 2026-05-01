@@ -33,8 +33,8 @@
 
 #include "../../src/port.h"
 #include "../../include/rtos_config.h"
+#include "../../src/kmem.h"
 #include <stdint.h>
-#include <string.h>
 
 // ---------------------------------------------------------------------------
 // TIMG0 register layout (Timer Group 0, base = RTOS_TIMG0_BASE_ADDR)
@@ -162,7 +162,7 @@ void *port_init_stack(void     *stack_top,
                       void     *arg)
 {
     uint32_t *sp = (uint32_t *)((uint8_t *)stack_top - FRAME_BYTES);
-    memset(sp, 0, FRAME_BYTES);
+    rtos_kmemset(sp, 0, FRAME_BYTES);
 
     // EPC1 = entry point of the task function.
     sp[OFF_EPC1 / 4] = (uint32_t)func;

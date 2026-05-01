@@ -45,8 +45,8 @@
 // x0 (zero) is not saved. x2 (sp) is saved in the TCB (g_current->sp).
 #include "../../src/port.h"
 #include "../../include/rtos_config.h"
+#include "../../src/kmem.h"
 #include <stdint.h>
-#include <string.h>
 
 // Trap handler defined in port_asm.S.
 extern void riscv_trap_handler(void);
@@ -115,7 +115,7 @@ void *port_init_stack(void     *stack_top,
                       void     *arg)
 {
     uint32_t *sp = (uint32_t *)((uint8_t *)stack_top - FRAME_BYTES);
-    memset(sp, 0, FRAME_BYTES);
+    rtos_kmemset(sp, 0, FRAME_BYTES);
 
     sp[0]  = (uint32_t)func;   // mepc  → task entry point
     sp[1]  = INIT_MSTATUS;     // mstatus

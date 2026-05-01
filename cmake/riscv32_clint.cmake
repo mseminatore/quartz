@@ -25,7 +25,7 @@ set(CMAKE_SIZE         riscv64-unknown-elf-size)
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 
 set(RV32_FLAGS
-    "-march=rv32imac"
+    "-march=rv32imac_zicsr"
     "-mabi=ilp32"
     "-mcmodel=medany"
     "-ffreestanding"
@@ -40,5 +40,5 @@ string(JOIN " " RV32_FLAGS_STR ${RV32_FLAGS})
 set(CMAKE_C_FLAGS   "${RV32_FLAGS_STR}" CACHE STRING "" FORCE)
 set(CMAKE_ASM_FLAGS "${RV32_FLAGS_STR}" CACHE STRING "" FORCE)
 set(CMAKE_EXE_LINKER_FLAGS
-    "-march=rv32imac -mabi=ilp32 -Wl,--gc-sections -nostartfiles"
+    "-march=rv32imac_zicsr -mabi=ilp32 -Wl,--gc-sections -nostartfiles"
     CACHE STRING "" FORCE)

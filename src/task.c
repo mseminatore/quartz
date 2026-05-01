@@ -5,7 +5,6 @@
 //---------------------------------------------------------------------------
 #include <stdint.h>
 #include <stddef.h>
-#include <string.h>
 #include "../include/rtos_task.h"
 #include "../include/rtos_trace.h"
 #include "list.h"
