@@ -135,3 +135,13 @@ file (`startup_stm32f4xx.s`) in your application's CMakeLists.  The kernel libra
   per-task save/restore of the FPv4-SP callee-saved registers (S16–S31) and per-task
   EXC_RETURN. Without this option the kernel saves R4–R11 only, so any task that uses
   floating-point instructions can corrupt the FP state of other tasks.
+
+---
+
+## Porting to a new architecture
+
+1. Copy `port/arm_cm0plus/` (or `port/riscv/`) to `port/<your-arch>/`
+2. Implement `port.c`: `port_init`, `port_enter_critical`, `port_exit_critical`, `port_request_reschedule`, `port_start_first_task`, `port_init_stack`, `port_cpu_idle`, `port_core_id`
+3. Implement `port_asm.S` (or use inline asm in `port.c`): the context-switch handler
+4. Optionally implement `port_suppress_ticks(max_ticks)` for tickless idle support
+5. Add a CMake toolchain file in `cmake/` and update `CMakeLists.txt` to select the port sources

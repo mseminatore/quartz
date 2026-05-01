@@ -103,7 +103,7 @@ the Pico SDK pulled in for RP2040 boards. `cm3`, `cm4`, and `cm7` all share the
 same `port/arm_cm4/` sources (Thumb-2 ISA, BASEPRI, PendSV) — only the
 toolchain `-mcpu`/`-mfpu` flags differ.
 
-See [PORTS.md](PORTS.md) for more details
+See [PORTS.md](PORTS.md) for more details.
 
 ---
 
@@ -253,6 +253,23 @@ is supported.
 
 Software timers use an **O(k)** sorted-list approach: the active timer list is kept sorted
 by absolute expiry tick so the tick handler only inspects the head, not all timers.
+
+---
+
+## Timeout values
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `RTOS_WAIT_FOREVER` | `0xFFFFFFFF` | Block indefinitely |
+| `RTOS_NO_WAIT` | `0` | Return immediately |
+
+## Return codes
+
+| Constant | Value |
+|---|---|
+| `RTOS_OK` | `0` |
+| `RTOS_ERR` | `-1` |
+| `RTOS_TIMEOUT` | `-2` |
 
 ---
 
@@ -524,32 +541,3 @@ cmake --build build_picow
 
 `wifi_http` requires `lwipopts.h` (provided in `samples/`) which configures
 lwIP for the Pico W background-IRQ integration.
-
----
-
-
-
-## Porting to a new architecture
-
-1. Copy `port/arm_cm0plus/` (or `port/riscv/`) to `port/<your-arch>/`
-2. Implement `port.c`: `port_init`, `port_enter_critical`, `port_exit_critical`, `port_request_reschedule`, `port_start_first_task`, `port_init_stack`, `port_cpu_idle`, `port_core_id`
-3. Implement `port_asm.S` (or use inline asm in `port.c`): the context-switch handler
-4. Optionally implement `port_suppress_ticks(max_ticks)` for tickless idle support
-5. Add a CMake toolchain file in `cmake/` and update `CMakeLists.txt` to select the port sources
-
----
-
-## Timeout values
-
-| Constant | Value | Meaning |
-|---|---|---|
-| `RTOS_WAIT_FOREVER` | `0xFFFFFFFF` | Block indefinitely |
-| `RTOS_NO_WAIT` | `0` | Return immediately |
-
-## Return codes
-
-| Constant | Value |
-|---|---|
-| `RTOS_OK` | `0` |
-| `RTOS_ERR` | `-1` |
-| `RTOS_TIMEOUT` | `-2` |
