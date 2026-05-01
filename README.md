@@ -401,6 +401,63 @@ Reading the layout:
   switch; the timestamps are exact (microsecond resolution).
 - Use **W**/**S** in `chrome://tracing` to zoom, **A**/**D** to pan.
 
+### Capturing a chrome trace from a Pico W via the Debug Probe
+
+The same recorder + decoder pipeline works on real hardware — the only
+extra step is shuttling the hex dump back to the host over a serial link.
+The bundled sample `samples/pico_trace_demo.c` (built only when the chrome
+backend is selected) does exactly that: it runs producer/consumer for 20
+iterations, then prints the trace ring buffer over USB CDC framed by
+`---BEGIN-TRACE---` / `---END---` markers.
+
+1. **Build with the chrome backend** (any RP2040 board; substitute
+   `pico` for `pico_w` if you're on the non-wireless Pico):
+
+   ```sh
+   export PICO_SDK_PATH=~/pico-sdk
+   cmake -B build_pico -DPICO_BOARD=pico_w -DRTOS_TRACE_BACKEND=chrome
+   cmake --build build_pico --target sample_pico_trace_demo
+   ```
+
+2. **Flash the .uf2 via the Pi Debug Probe** (uses the probe's SWD pins,
+   no need to enter BOOTSEL):
+
+   ```sh
+   picotool load -fx build_pico/sample_pico_trace_demo.uf2
+   # or, if you prefer openocd:
+   openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg \
+           -c "program build_pico/sample_pico_trace_demo.elf verify reset exit"
+   ```
+
+3. **Capture the serial output** from the Pico's native USB port (the
+   debug probe's UART bridge is not used in this flow — the probe handles
+   only flashing/SWD). The Pico enumerates as `/dev/ttyACM0` on Linux/WSL
+   or as a COM port on Windows:
+
+   ```sh
+   # Linux / macOS / WSL2:
+   cat /dev/ttyACM0 > capture.txt &
+   sleep 15 && pkill cat
+   # Windows: open the COM port in PuTTY / Tera Term with logging enabled,
+   #          let the demo run for ~10 s, then save the log as capture.txt.
+   ```
+
+4. **Decode and view** — the python decoder strips all non-hex characters
+   and stops at `---END---`, so you can feed it the raw serial log without
+   manually trimming the printf chatter:
+
+   ```sh
+   python3 tools/trace_to_chrome.py capture.txt --hex -o trace.json
+   ```
+
+   Open `trace.json` in `chrome://tracing` or [Perfetto UI](https://ui.perfetto.dev).
+
+> **Tip** — to capture from the probe's UART bridge (`/dev/ttyACM1` on a
+> Linux host with both probe and Pico USB connected) instead of the Pico's
+> own USB, edit the `pico_enable_stdio_usb` / `pico_enable_stdio_uart`
+> calls in `CMakeLists.txt` for `sample_pico_trace_demo`. The default uses
+> the Pico's USB CDC because it works whether or not a probe is attached.
+
 Knobs (set via `-D` at configure time, or in `rtos_config.h`):
 
 | Macro                        | Default | Purpose                                          |

@@ -346,4 +346,17 @@ if(RTOS_TARGET_PICO)
         pico_enable_stdio_usb(sample_wifi_http 1)
         pico_enable_stdio_uart(sample_wifi_http 0)
     endif()
+
+    # pico_trace_demo — only built when the chrome trace backend is selected.
+    # Routes printf over USB CDC so the host can capture the hex dump from
+    # /dev/ttyACM0 (Linux/macOS/WSL) or COMx (Windows) — works whether you
+    # flash via the Pi Debug Probe (SWD) or via BOOTSEL.
+    if(RTOS_TRACE_BACKEND STREQUAL "chrome")
+        add_executable(sample_pico_trace_demo samples/pico_trace_demo.c)
+        target_link_libraries(sample_pico_trace_demo rtos pico_stdlib)
+        target_include_directories(sample_pico_trace_demo PRIVATE include)
+        pico_add_extra_outputs(sample_pico_trace_demo)
+        pico_enable_stdio_usb(sample_pico_trace_demo 1)
+        pico_enable_stdio_uart(sample_pico_trace_demo 0)
+    endif()
 endif()
