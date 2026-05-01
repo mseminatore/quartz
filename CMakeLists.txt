@@ -70,8 +70,8 @@ endif()
 # When unset, CMAKE_SYSTEM_PROCESSOR is consulted for backward compatibility.
 
 set(RTOS_PORT "" CACHE STRING
-    "Port to build (pico|avr|riscv|esp32s3|cm4|host). Empty = auto-detect.")
-set_property(CACHE RTOS_PORT PROPERTY STRINGS "" pico avr riscv esp32s3 cm4 host)
+    "Port to build (pico|cm0plus|cm3|cm4|cm7|avr|riscv|esp32s3|host). Empty = auto-detect.")
+set_property(CACHE RTOS_PORT PROPERTY STRINGS "" pico cm0plus cm3 cm4 cm7 avr riscv esp32s3 host)
 
 # Resolve effective port: explicit RTOS_PORT wins; otherwise infer from
 # CMAKE_SYSTEM_PROCESSOR (set by the toolchain files).
@@ -83,8 +83,14 @@ elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "riscv")
     set(_rtos_port "riscv")
 elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "xtensa-esp32s3")
     set(_rtos_port "esp32s3")
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm_cm0plus")
+    set(_rtos_port "cm0plus")
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm_cm3")
+    set(_rtos_port "cm3")
 elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm_cm4")
     set(_rtos_port "cm4")
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm_cm7")
+    set(_rtos_port "cm7")
 elseif(RTOS_TARGET_PICO)
     set(_rtos_port "pico")
 else()
@@ -94,24 +100,31 @@ endif()
 set(RTOS_TARGET_AVR     OFF)
 set(RTOS_TARGET_RISCV   OFF)
 set(RTOS_TARGET_ESP32S3 OFF)
+set(RTOS_TARGET_CM0PLUS OFF)
 set(RTOS_TARGET_CM4     OFF)
 
 if(_rtos_port STREQUAL "pico")
-    set(RTOS_TARGET_PICO ON)
+    set(RTOS_TARGET_PICO    ON)
+    set(RTOS_TARGET_CM0PLUS ON)
+elseif(_rtos_port STREQUAL "cm0plus")
+    set(RTOS_TARGET_CM0PLUS ON)
 elseif(_rtos_port STREQUAL "avr")
     set(RTOS_TARGET_AVR ON)
 elseif(_rtos_port STREQUAL "riscv")
     set(RTOS_TARGET_RISCV ON)
 elseif(_rtos_port STREQUAL "esp32s3")
     set(RTOS_TARGET_ESP32S3 ON)
-elseif(_rtos_port STREQUAL "cm4")
+elseif(_rtos_port STREQUAL "cm3" OR _rtos_port STREQUAL "cm4" OR _rtos_port STREQUAL "cm7")
+    # All three Cortex-M variants share the same port sources (Thumb-2 ISA,
+    # BASEPRI critical sections, identical PendSV context-switch shape).
+    # The toolchain file selects the right -mcpu/-mfpu flags.
     set(RTOS_TARGET_CM4 ON)
 elseif(_rtos_port STREQUAL "host")
     # No port sources; host build (unit tests).
 else()
     message(FATAL_ERROR
         "Unknown RTOS_PORT='${_rtos_port}'. "
-        "Valid values: pico avr riscv esp32s3 cm4 host.")
+        "Valid values: pico cm0plus cm3 cm4 cm7 avr riscv esp32s3 host.")
 endif()
 
 message(STATUS "rtos: selected port = ${_rtos_port}")
@@ -129,7 +142,7 @@ set(RTOS_KERNEL_SOURCES
     src/timer.c
 )
 
-if(RTOS_TARGET_PICO)
+if(RTOS_TARGET_CM0PLUS)
     set(RTOS_PORT_SOURCES
         port/arm_cm0plus/port.c
         port/arm_cm0plus/port_asm.S
@@ -222,7 +235,7 @@ endforeach()
 # Host-side unit tests (runs on the development machine, no hardware needed)
 # ---------------------------------------------------------------------------
 
-if(NOT RTOS_TARGET_PICO AND NOT RTOS_TARGET_AVR AND NOT RTOS_TARGET_RISCV AND NOT RTOS_TARGET_ESP32S3 AND NOT RTOS_TARGET_CM4)
+if(NOT RTOS_TARGET_PICO AND NOT RTOS_TARGET_CM0PLUS AND NOT RTOS_TARGET_AVR AND NOT RTOS_TARGET_RISCV AND NOT RTOS_TARGET_ESP32S3 AND NOT RTOS_TARGET_CM4)
     enable_testing()
 
     add_executable(rtos_test test/test_rtos.c test/test_main.c)

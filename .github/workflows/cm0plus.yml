@@ -1,0 +1,30 @@
+name: cm0plus
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi
+
+      - name: Configure
+        run: |
+          cmake -B build_cm0plus \
+                -DRTOS_PORT=cm0plus \
+                -DCMAKE_TOOLCHAIN_FILE=cmake/arm_cm0plus_generic.cmake
+
+      - name: Build rtos library
+        run: cmake --build build_cm0plus --target rtos --parallel
+
+      - name: Verify librtos.a
+        run: |
+          test -f build_cm0plus/librtos.a
+          ls -l build_cm0plus/librtos.a

@@ -3,8 +3,11 @@
 [![host-linux](https://github.com/mseminatore/rtos/actions/workflows/host-linux.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/host-linux.yml)
 [![host-windows](https://github.com/mseminatore/rtos/actions/workflows/host-windows.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/host-windows.yml)
 [![avr](https://github.com/mseminatore/rtos/actions/workflows/avr.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/avr.yml)
+[![cm0plus](https://github.com/mseminatore/rtos/actions/workflows/cm0plus.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm0plus.yml)
+[![cm3](https://github.com/mseminatore/rtos/actions/workflows/cm3.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm3.yml)
 [![cm4](https://github.com/mseminatore/rtos/actions/workflows/cm4.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm4.yml)
 [![cm4-fpu](https://github.com/mseminatore/rtos/actions/workflows/cm4-fpu.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm4-fpu.yml)
+[![cm7](https://github.com/mseminatore/rtos/actions/workflows/cm7.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm7.yml)
 [![riscv](https://github.com/mseminatore/rtos/actions/workflows/riscv.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/riscv.yml)
 
 A small, fast, portable, RTOS written in C.
@@ -43,8 +46,8 @@ rtos/
 │   ├── list.c        # Internal sorted linked list
 │   └── compat.h      # Compiler compatibility (MSVC / GCC / Clang)
 ├── port/
-│   ├── arm_cm0plus/       # SysTick, PendSV context switch (RP2040)
-│   ├── arm_cm4/           # SysTick, BASEPRI critical sections, PendSV (generic M4F)
+│   ├── arm_cm0plus/       # SysTick, PendSV context switch (M0+ — used by RP2040 and bare CM0+)
+│   ├── arm_cm4/           # SysTick, BASEPRI critical sections, PendSV (shared by M3/M4/M7)
 │   ├── avr_atmega/        # Timer1 CTC, cli/sei, ISR_NAKED context switch (ATmega328P)
 │   ├── riscv/             # CLINT timer, machine-mode trap handler (RV32IMAC)
 │   ├── xtensa_esp32s3/    # TIMG0 timer, interrupt matrix, Xtensa level-1 ISR (ESP32-S3)
@@ -58,10 +61,13 @@ rtos/
 │   ├── wifi_http.c              # Pico W: WiFi connect + HTTP GET (semaphore sequencing)
 │   └── lwipopts.h               # Minimal lwIP config for wifi_http
 ├── cmake/
-│   ├── avr_atmega328p.cmake   # avr-gcc toolchain file
-│   ├── riscv32_clint.cmake    # riscv64-unknown-elf-gcc toolchain file (rv32imac)
-│   ├── esp32s3_qemu.cmake     # xtensa-esp32s3-elf-gcc toolchain file (Call0 ABI)
-│   └── arm_cm4.cmake          # arm-none-eabi-gcc toolchain file (Cortex-M4F)
+│   ├── avr_atmega328p.cmake       # avr-gcc toolchain file
+│   ├── riscv32_clint.cmake        # riscv64-unknown-elf-gcc toolchain file (rv32imac_zicsr)
+│   ├── esp32s3_qemu.cmake         # xtensa-esp32s3-elf-gcc toolchain file (Call0 ABI)
+│   ├── arm_cm0plus_generic.cmake  # arm-none-eabi-gcc toolchain file (bare Cortex-M0+)
+│   ├── arm_cm3.cmake              # arm-none-eabi-gcc toolchain file (Cortex-M3)
+│   ├── arm_cm4.cmake              # arm-none-eabi-gcc toolchain file (Cortex-M4F)
+│   └── arm_cm7.cmake              # arm-none-eabi-gcc toolchain file (Cortex-M7, fpv5-sp-d16)
 ├── test/
 │   ├── test.h        # Testy unit-test framework (vendored)
 │   ├── test_main.c   # Testy entry point
@@ -140,10 +146,18 @@ cmake -B build -DRTOS_PORT=host           # host unit tests only (no port source
 cmake -B build_avr     -DRTOS_PORT=avr     -DCMAKE_TOOLCHAIN_FILE=cmake/avr_atmega328p.cmake
 cmake -B build_rv32    -DRTOS_PORT=riscv   -DCMAKE_TOOLCHAIN_FILE=cmake/riscv32_clint.cmake
 cmake -B build_esp32s3 -DRTOS_PORT=esp32s3 -DCMAKE_TOOLCHAIN_FILE=cmake/esp32s3_qemu.cmake
+cmake -B build_cm0plus -DRTOS_PORT=cm0plus -DCMAKE_TOOLCHAIN_FILE=cmake/arm_cm0plus_generic.cmake
+cmake -B build_cm3     -DRTOS_PORT=cm3     -DCMAKE_TOOLCHAIN_FILE=cmake/arm_cm3.cmake
 cmake -B build_cm4     -DRTOS_PORT=cm4     -DCMAKE_TOOLCHAIN_FILE=cmake/arm_cm4.cmake
+cmake -B build_cm7     -DRTOS_PORT=cm7     -DCMAKE_TOOLCHAIN_FILE=cmake/arm_cm7.cmake
 ```
 
-Valid `RTOS_PORT` values: `pico`, `avr`, `riscv`, `esp32s3`, `cm4`, `host`.
+Valid `RTOS_PORT` values: `pico`, `cm0plus`, `cm3`, `cm4`, `cm7`, `avr`, `riscv`, `esp32s3`, `host`.
+
+`cm0plus` is the bare-metal Cortex-M0+ flavour (no SDK). Use `pico` if you want
+the Pico SDK pulled in for RP2040 boards. `cm3`, `cm4`, and `cm7` all share the
+same `port/arm_cm4/` sources (Thumb-2 ISA, BASEPRI, PendSV) — only the
+toolchain `-mcpu`/`-mfpu` flags differ.
 
 ### RP2040 (requires [pico-sdk](https://github.com/raspberrypi/pico-sdk))
 
