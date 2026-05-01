@@ -925,8 +925,8 @@ rtos_tcb_t  *rtos_next_task(void)       { return scheduler_pick_next(); }
 // make it the new current task.  Called from PendSV (ARM) or the timer ISR (AVR).
 void rtos_context_switch(void)
 {
+    rtos_tcb_t *prev = G_CURRENT;
     if (G_CURRENT && G_CURRENT->state == TASK_RUNNING) {
-        RTOS_TRACE_TASK_SWITCHED_OUT(G_CURRENT);
         ready_add(G_CURRENT);
     }
 
@@ -935,7 +935,17 @@ void rtos_context_switch(void)
     G_CURRENT->state = TASK_RUNNING;
     ready_remove(G_CURRENT);
 
-    RTOS_TRACE_TASK_SWITCHED_IN(G_CURRENT);
+    // Only record a SWITCH_OUT/SWITCH_IN trace pair when the running task
+    // actually changes.  Otherwise (host port re-picks the same task after
+    // every kernel call, or any port re-enters the scheduler with no
+    // higher-prio task ready) we'd flood the ring buffer with self-switch
+    // noise that adds nothing to the visualization.  Note that prev's state
+    // may be TASK_RUNNING (preempted, re-added to ready) or TASK_BLOCKED
+    // (yielded voluntarily); either way SWITCH_OUT is the right event.
+    if (next != prev) {
+        if (prev) RTOS_TRACE_TASK_SWITCHED_OUT(prev);
+        RTOS_TRACE_TASK_SWITCHED_IN(next);
+    }
 }
 
 //---------------------------------------------------------------------------

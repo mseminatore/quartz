@@ -115,10 +115,9 @@ def emit_chrome(names, records):
         # sort_index orders the lanes; tasks first, "events" last.
         events.append({"name": "thread_sort_index", "ph": "M", "pid": pid,
                        "tid": tid, "args": {"sort_index": tid}})
-    events.append({"name": "thread_name", "ph": "M", "pid": pid,
-                   "tid": EVENTS_TID, "args": {"name": "events"}})
-    events.append({"name": "thread_sort_index", "ph": "M", "pid": pid,
-                   "tid": EVENTS_TID, "args": {"sort_index": EVENTS_TID}})
+    # The "events" lane is added lazily — only if at least one IPC instant
+    # actually lands there (i.e. fired before any task was running).
+    events_lane_used = False
 
     def hname(hid: int) -> str:
         n = names.get(hid)
@@ -162,11 +161,21 @@ def emit_chrome(names, records):
             # Put the instant on the current task's lane so it's visually
             # associated with whoever caused it; fall back to the events lane
             # if no task is running yet.
-            tid = current_tid if current_tid is not None else EVENTS_TID
+            if current_tid is not None:
+                tid = current_tid
+            else:
+                tid = EVENTS_TID
+                events_lane_used = True
             events.append({"ph": "i", "s": "t", "pid": pid, "tid": tid,
                            "ts": r["ts"], "name": f"{label}({target})",
                            "args": {"handle": target, "by_task": current,
                                     "aux1": r["aux1"], "aux2": r["aux2"]}})
+
+    if events_lane_used:
+        events.append({"name": "thread_name", "ph": "M", "pid": pid,
+                       "tid": EVENTS_TID, "args": {"name": "events"}})
+        events.append({"name": "thread_sort_index", "ph": "M", "pid": pid,
+                       "tid": EVENTS_TID, "args": {"sort_index": EVENTS_TID}})
 
     # Chrome Trace Event Format only accepts "ms" (default) or "ns" for
     # displayTimeUnit.  Our `ts` values are integer microseconds (the format's
