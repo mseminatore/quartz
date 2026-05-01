@@ -55,7 +55,7 @@ Edit `include/rtos_config.h` (or define before including `rtos.h`):
 | `RTOS_TICKLESS_IDLE` | 0 | Skip ticks while all tasks are blocked; requires `port_suppress_ticks()` |
 | `RTOS_IDLE_HOOK_FUNCTION` | (none) | `void fn(void)` called from idle on every idle loop iteration |
 
-### Multi-core settings`
+### Multi-core settings
 
 | Macro | Default | Meaning |
 |---|---|---|
