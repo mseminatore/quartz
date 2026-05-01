@@ -1,14 +1,11 @@
 # rtos
 
-[![host-linux](https://github.com/mseminatore/rtos/actions/workflows/host-linux.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/host-linux.yml)
-[![host-windows](https://github.com/mseminatore/rtos/actions/workflows/host-windows.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/host-windows.yml)
-[![avr](https://github.com/mseminatore/rtos/actions/workflows/avr.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/avr.yml)
-[![cm0plus](https://github.com/mseminatore/rtos/actions/workflows/cm0plus.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm0plus.yml)
-[![cm3](https://github.com/mseminatore/rtos/actions/workflows/cm3.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm3.yml)
-[![cm4](https://github.com/mseminatore/rtos/actions/workflows/cm4.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm4.yml)
-[![cm4-fpu](https://github.com/mseminatore/rtos/actions/workflows/cm4-fpu.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm4-fpu.yml)
-[![cm7](https://github.com/mseminatore/rtos/actions/workflows/cm7.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm7.yml)
-[![riscv](https://github.com/mseminatore/rtos/actions/workflows/riscv.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/riscv.yml)
+| Family       | CI status |
+|--------------|-----------|
+| Host         | [![host-linux](https://github.com/mseminatore/rtos/actions/workflows/host-linux.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/host-linux.yml) [![host-windows](https://github.com/mseminatore/rtos/actions/workflows/host-windows.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/host-windows.yml) |
+| ARM Cortex-M | [![cm0plus](https://github.com/mseminatore/rtos/actions/workflows/cm0plus.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm0plus.yml) [![cm3](https://github.com/mseminatore/rtos/actions/workflows/cm3.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm3.yml) [![cm4](https://github.com/mseminatore/rtos/actions/workflows/cm4.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm4.yml) [![cm4-fpu](https://github.com/mseminatore/rtos/actions/workflows/cm4-fpu.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm4-fpu.yml) [![cm7](https://github.com/mseminatore/rtos/actions/workflows/cm7.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm7.yml) |
+| AVR          | [![avr](https://github.com/mseminatore/rtos/actions/workflows/avr.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/avr.yml) |
+| RISC-V       | [![riscv](https://github.com/mseminatore/rtos/actions/workflows/riscv.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/riscv.yml) |
 
 A small, fast, portable, RTOS written in C.
 
