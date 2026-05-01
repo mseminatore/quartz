@@ -277,6 +277,85 @@ static void test_delay_until(void)
     g_current = NULL;
     g_tick_count = 0;
 }
+
+// ---------------------------------------------------------------------------
+// Verify that rtos_task_delay_until is drift-free across many scheduler cycles.
+//
+// Strategy: manually drive N full periods by calling rtos_task_delay_until,
+// then rtos_tick_advance(PERIOD) to simulate tick passage, checking that the
+// task unblocks at exactly the right tick each time.  Also verifies that a
+// mid-period overrun (task body takes longer than expected) does NOT cause
+// drift in subsequent deadlines.
+// ---------------------------------------------------------------------------
+static void test_delay_until_multi_cycle(void)
+{
+    SUITE("delay_until multi-cycle drift-free");
+
+    g_blocked = NULL;
+    g_tick_count = 0;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+
+    static rtos_tcb_t tcb;
+    static uint32_t   stack[64];
+    rtos_task_create(&tcb, stack, 64, (void(*)(void*))1, NULL, "blink", 1);
+    g_current = &tcb;
+    tcb.state  = TASK_RUNNING;
+
+    const rtos_tick_t PERIOD = 500;
+    rtos_tick_t last_wake    = g_tick_count;    /* == 0 */
+
+#define NUM_PERIODS 5
+    for (int i = 1; i <= NUM_PERIODS; i++) {
+        rtos_task_delay_until(&last_wake, PERIOD);
+
+        rtos_tick_t expected = (rtos_tick_t)(i * PERIOD);
+        TEST(last_wake        == expected);     /* absolute deadline advanced */
+        TEST(tcb.wakeup_tick  == expected);     /* blocked until that tick   */
+        TEST(tcb.state        == TASK_BLOCKED);
+
+        /* simulate exactly PERIOD ticks from the ISR */
+        rtos_tick_advance(PERIOD);
+        TEST(g_tick_count     == expected);     /* tick count is exact       */
+        TEST(tcb.state        == TASK_READY);   /* unblocked at correct tick */
+        TEST(tcb.on_blocked   == 0);
+
+        /* simulate scheduler dispatching the task */
+        tcb.state = TASK_RUNNING;
+    }
+#undef NUM_PERIODS
+
+    /* -------------------------------------------------------------------- */
+    /* Overrun test: task body "takes" 50 extra ticks.                       */
+    /* At this point g_tick_count == last_wake == 2500.                      */
+    /* Advance without calling delay_until — simulates a long task body.     */
+    /* -------------------------------------------------------------------- */
+    g_tick_count += 50;   /* now 2550 — 50-tick overrun */
+
+    rtos_task_delay_until(&last_wake, PERIOD);
+    /* next deadline = 2500 + 500 = 3000                                     */
+    /* remaining     = 3000 - 2550 = 450 (NOT 500 — compensates for overrun) */
+    TEST(last_wake       == 3000);
+    TEST(tcb.wakeup_tick == 3000);
+
+    /* advance 450 ticks to reach tick 3000 (not 500 — drift is compensated) */
+    rtos_tick_advance(450);
+    TEST(g_tick_count    == 3000);
+    TEST(tcb.state       == TASK_READY);
+    tcb.state = TASK_RUNNING;
+
+    /* following period: starts from 3000, so next deadline is 3500 */
+    rtos_task_delay_until(&last_wake, PERIOD);
+    TEST(last_wake       == 3500);
+    TEST(tcb.wakeup_tick == 3500);
+
+    g_current      = NULL;
+    g_tick_count   = 0;
+    g_blocked      = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+
 static int g_timer_fires = 0;
 static void timer_cb(rtos_handle_t t) { (void)t; g_timer_fires++; }
 
@@ -1908,6 +1987,7 @@ void test_main(int argc, char *argv[])
     test_task_notify();
 #endif
     test_delay_until();
+    test_delay_until_multi_cycle();
     test_ok_tick_handler();
     test_ipc_timeout();
 #if RTOS_ENABLE_PRIORITY_INHERITANCE
