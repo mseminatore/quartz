@@ -67,6 +67,18 @@
 static uint32_t g_basepri_stack[8];
 static uint32_t g_critical_nesting = 0;
 
+#define RTOS_BASEPRI_STACK_DEPTH \
+    (sizeof(g_basepri_stack) / sizeof(g_basepri_stack[0]))
+
+// Optional overflow handler — application can override this to log/panic when
+// critical-section nesting exceeds RTOS_BASEPRI_STACK_DEPTH (truncation point
+// after which BASEPRI restore values are lost). Default: spin to halt the CPU
+// rather than silently mis-restore interrupt masking.
+__attribute__((weak)) void rtos_port_critical_overflow_hook(void)
+{
+    for (;;) { /* halt — increase RTOS_BASEPRI_STACK_DEPTH */ }
+}
+
 void port_enter_critical(void)
 {
     uint32_t prev;
@@ -80,8 +92,10 @@ void port_enter_critical(void)
         :: "r"(val) : "memory"
     );
 
-    if (g_critical_nesting < sizeof(g_basepri_stack) / sizeof(g_basepri_stack[0]))
+    if (g_critical_nesting < RTOS_BASEPRI_STACK_DEPTH)
         g_basepri_stack[g_critical_nesting] = prev;
+    else
+        rtos_port_critical_overflow_hook();
     g_critical_nesting++;
 }
 
@@ -91,7 +105,7 @@ void port_exit_critical(void)
     g_critical_nesting--;
 
     uint32_t restore = 0;
-    if (g_critical_nesting < sizeof(g_basepri_stack) / sizeof(g_basepri_stack[0]))
+    if (g_critical_nesting < RTOS_BASEPRI_STACK_DEPTH)
         restore = g_basepri_stack[g_critical_nesting];
 
     __asm volatile (
@@ -117,9 +131,17 @@ void port_request_reschedule(void)
 //   xPSR, PC, LR, R12, R3, R2, R1, R0
 //
 // Software frame (saved by PendSV_Handler before the hardware frame):
-//   R4, R5, R6, R7, R8, R9, R10, R11
+//   Without FPU support  : R4, R5, R6, R7, R8, R9, R10, R11           (8 words)
+//   With RTOS_CM4_FPU=1  : R4..R11 plus EXC_RETURN (LR)               (9 words)
+//                          When the task has touched the FPU the CPU's lazy
+//                          stacking pushes S0-S15 + FPSCR onto the hardware
+//                          frame, and PendSV pushes S16-S31 onto the software
+//                          frame. The saved EXC_RETURN value tells the restore
+//                          path which layout is in use.
 //
-// Total initial stack depth: 16 words (64 bytes, aligned to 8 bytes).
+// Total initial stack depth: 16 words (non-FPU) or 17 words (FPU), aligned to
+// 8 bytes. Initial EXC_RETURN is 0xFFFFFFFD (Thread/PSP/basic frame); the
+// first FP instruction will lazily switch the task to extended frames.
 // ---------------------------------------------------------------------------
 
 void *port_init_stack(void     *stack_top,
@@ -139,7 +161,13 @@ void *port_init_stack(void     *stack_top,
     *--sp = 0x00000000u;           // R1
     *--sp = (uint32_t)arg;         // R0   — first argument to func
 
-    // Software-saved registers (saved/restored by PendSV_Handler):
+    // Software-saved registers (saved/restored by PendSV_Handler).
+    // With FPU support we also save EXC_RETURN per-task (the bottom slot of
+    // the software frame) so each task can return to either basic or extended
+    // exception state independently.
+#if RTOS_CM4_FPU
+    *--sp = 0xFFFFFFFDu;           // EXC_RETURN — basic frame initially
+#endif
     *--sp = 0x00000000u;           // R11
     *--sp = 0x00000000u;           // R10
     *--sp = 0x00000000u;           // R9
@@ -189,6 +217,8 @@ void port_init(uint32_t tick_rate_hz)
 // ---------------------------------------------------------------------------
 // SVC_Handler — raises exception context so that EXC_RETURN can be used.
 // On M4 (Thumb-2), ldmia works with all R4-R11 in a single instruction.
+// With RTOS_CM4_FPU=1 the saved software frame includes EXC_RETURN as its
+// bottom slot, so the first task starts with the correct frame state.
 // ---------------------------------------------------------------------------
 
 __attribute__((naked))
@@ -206,8 +236,17 @@ void SVC_Handler(void)
         "msr    control, r0             \n"
         "isb                            \n"
 
-        // Restore R4-R11 and advance PSP past them to the hardware frame.
-        // Thumb-2 ldmia can address R8-R11 directly — no two-step needed.
+        // Restore the software frame.
+#if RTOS_CM4_FPU
+        // FPU build: software frame is { R4-R11, EXC_RETURN }. Pop EXC_RETURN
+        // into LR so the bx lr below honours the per-task frame state. The
+        // initial frame is always basic (0xFFFFFFFD), so no S16-S31 need
+        // restoring on first entry.
+        "mrs    r0, psp                 \n"
+        "ldmia  r0!, {r4-r11, lr}       \n"  // restore R4-R11 and EXC_RETURN
+        "msr    psp, r0                 \n"
+        "bx     lr                      \n"
+#else
         "mrs    r0, psp                 \n"
         "ldmia  r0!, {r4-r11}           \n"  // restore R4-R11; r0 = hardware frame
         "msr    psp, r0                 \n"
@@ -215,6 +254,7 @@ void SVC_Handler(void)
         // EXC_RETURN: Thread mode, PSP, basic frame (no extended FPU frame)
         "ldr    r0, =0xFFFFFFFD         \n"
         "bx     r0                      \n"
+#endif
         ::: "memory"
     );
 }

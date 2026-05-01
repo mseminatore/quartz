@@ -8,9 +8,10 @@
 // rtos_timer_tick() only needs to inspect the head, giving O(k) behaviour
 // where k is the number of timers firing this tick (usually 0 or 1).
 //
-// NOTE: Timer callbacks must not call rtos_timer_reset() on the timer that
-// is currently firing (i.e. on themselves). Calling rtos_timer_stop() on
-// the currently-firing timer from its own callback is supported.
+// A timer callback MAY call rtos_timer_stop() or rtos_timer_reset() on the
+// timer that is currently firing (i.e. on itself). Such re-entrant calls
+// are safe: the post-callback re-arm/deactivate logic respects whatever
+// state the callback left the timer in.
 //---------------------------------------------------------------------------
 #include <stdint.h>
 #include "../include/rtos_timer.h"
@@ -26,6 +27,14 @@ static rtos_timer_t *g_timer_list  = NULL;  // sorted active timer list
                                              // owned by core 0 — only core 0's
                                              // rtos_tick_handler calls rtos_timer_tick()
 static size_t        g_timer_count = 0;     // number of active timers
+
+// Set to the timer whose callback is currently executing (NULL otherwise).
+// Used to make rtos_timer_reset/start/stop re-entrant from inside a callback
+// without corrupting g_timer_list or g_timer_count.
+static rtos_timer_t *g_firing_timer    = NULL;
+// Set to 1 when the firing timer's callback re-armed it via reset/start;
+// the post-callback path uses this to avoid double-inserting / mis-counting.
+static uint8_t       g_firing_rearmed  = 0;
 
 //---------------------------------------------------------------------------
 // Insert timer into g_timer_list sorted by ascending abs_expiry_tick.
@@ -113,6 +122,19 @@ void rtos_timer_start(rtos_handle_t handle)
 
     port_enter_critical();
 
+    // Re-entrant call from within the timer's own callback: the timer is
+    // currently outside the active list (was popped by rtos_timer_tick),
+    // and g_timer_count was already decremented if the callback called stop
+    // first. Mark it active and let the post-callback path re-insert it.
+    if (timer == g_firing_timer)
+    {
+        timer->abs_expiry_tick = rtos_task_tick_count() + timer->period_ticks;
+        timer->active          = 1;
+        g_firing_rearmed       = 1;
+        port_exit_critical();
+        return;
+    }
+
     if (g_timer_count >= RTOS_MAX_TIMERS)
     {
         port_exit_critical();
@@ -137,6 +159,18 @@ void rtos_timer_stop(rtos_handle_t handle)
 
     port_enter_critical();
 
+    // Re-entrant call from inside the timer's own callback: the timer was
+    // already removed from g_timer_list before the callback ran, and
+    // g_timer_count was not yet decremented. Just mark inactive and clear
+    // any prior in-callback rearm so the post-callback logic skips it.
+    if (timer == g_firing_timer)
+    {
+        timer->active    = 0;
+        g_firing_rearmed = 0;
+        port_exit_critical();
+        return;
+    }
+
     timer_list_remove(timer);
     timer->active = 0;
     g_timer_count--;
@@ -154,6 +188,17 @@ void rtos_timer_reset(rtos_handle_t handle)
     if (!timer) return;
 
     port_enter_critical();
+
+    // Re-entrant call from inside the timer's own callback. The timer is
+    // currently off-list; defer the re-insert to the post-callback path.
+    if (timer == g_firing_timer)
+    {
+        timer->abs_expiry_tick = rtos_task_tick_count() + timer->period_ticks;
+        timer->active          = 1;
+        g_firing_rearmed       = 1;
+        port_exit_critical();
+        return;
+    }
 
     if (timer->active)
     {
@@ -216,12 +261,26 @@ void rtos_timer_tick(rtos_tick_t now)
         g_timer_list = cur->next;
         cur->next    = NULL;
 
+        // Mark this timer as currently firing so reset/start/stop calls from
+        // within the callback are routed through the re-entrant path.
+        g_firing_timer   = cur;
+        g_firing_rearmed = 0;
+
         RTOS_TRACE_TIMER_FIRE(cur);
         cur->cb((rtos_handle_t)cur);
 
-        // Re-arm or deactivate. Check cur->active: the callback may have
-        // called rtos_timer_stop(cur), in which case active is already 0.
-        if (cur->active)
+        uint8_t rearmed = g_firing_rearmed;
+        g_firing_timer   = NULL;
+        g_firing_rearmed = 0;
+
+        if (rearmed)
+        {
+            // Callback called rtos_timer_reset(self) or rtos_timer_start(self).
+            // Timer is still off the list and the active count was not
+            // decremented when we popped it, so just re-insert.
+            timer_list_insert_sorted(cur);
+        }
+        else if (cur->active)
         {
             if (cur->periodic)
             {
@@ -235,6 +294,12 @@ void rtos_timer_tick(rtos_tick_t now)
                 cur->active = 0;
                 g_timer_count--;
             }
+        }
+        else
+        {
+            // Callback called rtos_timer_stop(self) — already inactive.
+            // Decrement count to balance the popped one-shot.
+            g_timer_count--;
         }
     }
 }

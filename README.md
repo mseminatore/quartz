@@ -123,6 +123,22 @@ The test suite uses the [testy](https://github.com/mseminatore/testy) micro-fram
 (vendored in `test/test.h`).  It builds on GCC, Clang, and MSVC without extra
 dependencies.
 
+### Selecting a port
+
+Each cross-compile preset is selected by its CMake toolchain file (the toolchain file
+sets `CMAKE_SYSTEM_PROCESSOR` so the build picks the right port sources). You can also
+force the port explicitly with `-DRTOS_PORT=<name>` (overrides the auto-detected value):
+
+```sh
+cmake -B build -DRTOS_PORT=host           # host unit tests only (no port sources)
+cmake -B build_avr     -DRTOS_PORT=avr     -DCMAKE_TOOLCHAIN_FILE=cmake/avr_atmega328p.cmake
+cmake -B build_rv32    -DRTOS_PORT=riscv   -DCMAKE_TOOLCHAIN_FILE=cmake/riscv32_clint.cmake
+cmake -B build_esp32s3 -DRTOS_PORT=esp32s3 -DCMAKE_TOOLCHAIN_FILE=cmake/esp32s3_qemu.cmake
+cmake -B build_cm4     -DRTOS_PORT=cm4     -DCMAKE_TOOLCHAIN_FILE=cmake/arm_cm4.cmake
+```
+
+Valid `RTOS_PORT` values: `pico`, `avr`, `riscv`, `esp32s3`, `cm4`, `host`.
+
 ### RP2040 (requires [pico-sdk](https://github.com/raspberrypi/pico-sdk))
 
 ```sh
@@ -164,6 +180,12 @@ static uint8_t    my_stack[64];   // 64 bytes
 
 rtos_task_create(&my_tcb, my_stack, 64, my_task_func, NULL, "myTask", 1);
 ```
+
+The AVR port is fully preemptive: in addition to the periodic Timer1 OCR1A tick,
+`port_request_reschedule()` arms a Timer1 OCR1B compare-match one count in the future
+so that an in-task or ISR call to `rtos_semaphore_give`/`rtos_queue_send` (etc.) that
+unblocks a higher-priority task triggers a context switch immediately, without waiting
+for the next tick.
 
 ### RISC-V RV32IMAC (QEMU virt / SiFive FE310 / HiFive1)
 
@@ -249,10 +271,10 @@ file (`startup_stm32f4xx.s`) in your application's CMakeLists.  The kernel libra
   configured at a numeric priority **≥** `RTOS_BASEPRI_VALUE >> 4`.
 - **Simplified assembly**: Thumb-2 `stmdb`/`ldmia` save/restore R4–R11 in a single
   instruction each (no two-step dance needed for R8–R11).
-- **FPU note**: this port saves R4–R11 only.  If tasks use floating-point instructions
-  (hard-float ABI), the S16–S31 callee-saved FP registers must also be saved around
-  context switches.  `port_init_stack` and `port_asm.S` would need to be extended;
-  a future `RTOS_CM4_FPU=1` option is planned.
+- **FPU support**: Set `-DRTOS_CM4_FPU=1` (or define in `rtos_config.h`) to enable
+  per-task save/restore of the FPv4-SP callee-saved registers (S16–S31) and per-task
+  EXC_RETURN. Without this option the kernel saves R4–R11 only, so any task that uses
+  floating-point instructions can corrupt the FP state of other tasks.
 
 ---
 
@@ -289,12 +311,24 @@ void rtos_task_suspend(rtos_handle_t);
 void rtos_task_resume(rtos_handle_t);
 void rtos_task_delete(rtos_handle_t);   // pass NULL for current task
 
-// Task notifications — lightweight per-task binary semaphore, zero extra
-// allocation. Common pattern for ISR→task or task→task signaling.
+// Task notifications — lightweight per-task signal with optional 32-bit
+// value. Common pattern for ISR→task or task→task signaling, zero extra
+// allocation. Includes binary, set-bits, counting, and overwrite semantics.
 void rtos_task_notify(rtos_handle_t task);            // from task context
 void rtos_task_notify_from_isr(rtos_handle_t task);  // from ISR context
 int  rtos_task_notify_wait(uint32_t timeout_ticks);  // RTOS_OK or RTOS_TIMEOUT
 void rtos_task_notify_clear(void);   // discard a pending notification without waiting
+
+// Value-passing notifications (FreeRTOS-style):
+//   action ∈ { RTOS_NOTIFY_NONE,           // just mark pending
+//              RTOS_NOTIFY_SET_BITS,       // value |= bits
+//              RTOS_NOTIFY_INCREMENT,      // value++ (counting)
+//              RTOS_NOTIFY_OVERWRITE,      // value = bits
+//              RTOS_NOTIFY_SET_NO_OVERWRITE } // fails if already pending
+int  rtos_task_notify_value(rtos_handle_t task, rtos_notify_action_t action, uint32_t value);
+int  rtos_task_notify_value_from_isr(rtos_handle_t task, rtos_notify_action_t action, uint32_t value);
+int  rtos_task_notify_wait_value(uint32_t clear_on_entry, uint32_t clear_on_exit,
+                                 uint32_t *value_out, uint32_t timeout_ticks);
 
 // Inspection and priority control
 rtos_task_state_t rtos_task_get_state(rtos_handle_t task);    // TASK_READY etc.
@@ -328,11 +362,13 @@ int rtos_semaphore_take_from_isr(s);         // ISR-safe try-take; RTOS_OK or RT
 
 ### Mutexes
 
-Mutexes include **priority inheritance**: when a high-priority task blocks waiting for a
-mutex held by a lower-priority task, the owner's priority is temporarily boosted to the
-waiter's level so that a medium-priority task cannot starve the owner (and therefore the
-high-priority waiter).  The boost is restored when the mutex is unlocked.  This is
-single-level inheritance (no chain propagation across nested mutexes).
+Mutexes include **priority inheritance with full multi-mutex tracking**: when a
+high-priority task blocks waiting for a mutex held by a lower-priority task, the owner's
+priority is temporarily boosted to the highest waiter's level so a medium-priority task
+cannot starve the owner.  When the owner holds several mutexes, its boost is recomputed
+across all held mutexes on every lock/unlock/timeout, so a boost from one mutex is
+preserved while another is released.  Note: this is **single-level** inheritance — boost
+does not propagate transitively across chains of waiters.
 
 ```c
 static rtos_mutex_t my_mutex;
@@ -340,6 +376,15 @@ rtos_handle_t m = rtos_mutex_create(&my_mutex);
 
 rtos_mutex_lock(m, RTOS_WAIT_FOREVER);
 rtos_mutex_unlock(m);   // returns RTOS_OK, or RTOS_ERR if caller is not the owner
+
+// Recursive variant: the same task may lock multiple times; must unlock the
+// same number of times before another task can acquire.
+static rtos_mutex_t rec_mutex;
+rtos_handle_t rm = rtos_mutex_create_recursive(&rec_mutex);
+rtos_mutex_lock(rm, RTOS_WAIT_FOREVER);   // nest_count = 1
+rtos_mutex_lock(rm, RTOS_WAIT_FOREVER);   // nest_count = 2
+rtos_mutex_unlock(rm);                    // nest_count = 1
+rtos_mutex_unlock(rm);                    // nest_count = 0; released
 ```
 
 ### Message queues
@@ -353,6 +398,13 @@ rtos_queue_send(q, &val, RTOS_WAIT_FOREVER);
 rtos_queue_receive(q, &val, RTOS_WAIT_FOREVER);
 rtos_queue_send_from_isr(q, &val);
 rtos_queue_messages_waiting(q);
+rtos_queue_spaces_available(q);
+
+// Peek at the next item without removing it.
+rtos_queue_peek(q, &val, RTOS_NO_WAIT);
+
+// Send to the front of the queue (LIFO) for high-priority messages.
+rtos_queue_send_to_front(q, &val, RTOS_WAIT_FOREVER);
 ```
 
 ### Software timers

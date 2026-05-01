@@ -212,4 +212,21 @@
 #   define RTOS_ENABLE_PRIORITY_INHERITANCE  1
 #endif
 
+// Enable Cortex-M4 FPU context save/restore. Set to 1 if any task uses
+// floating-point instructions (single-precision FPv4). Adds save/restore of
+// S16-S31 and FPSCR around the context switch and grows each task's saved
+// context by up to 17 words when the FPU has been used by that task.
+// No effect on non-Cortex-M4 ports.
+#ifndef RTOS_CM4_FPU
+#   define RTOS_CM4_FPU  0
+#endif
+
+// Enable recursive mutex support. Adds 2 bytes per mutex (recursive flag and
+// nest count) and a small amount of code in rtos_mutex_lock/unlock. Set to 0
+// if no recursive mutexes are needed; rtos_mutex_create_recursive() will be
+// unavailable.
+#ifndef RTOS_ENABLE_RECURSIVE_MUTEX
+#   define RTOS_ENABLE_RECURSIVE_MUTEX  1
+#endif
+
 #endif // RTOS_CONFIG_H

@@ -159,6 +159,7 @@ void rtos_semaphore_give_from_isr(rtos_handle_t handle)
     } else if (sem->count < sem->max_count) {
         sem->count++;
     }
+    RTOS_TRACE_SEM_GIVE(sem);
 }
 
 //---------------------------------------------------------------------------
@@ -173,6 +174,7 @@ int rtos_semaphore_take_from_isr(rtos_handle_t handle)
 
     if (sem->count > 0) {
         sem->count--;
+        RTOS_TRACE_SEM_TAKE(sem);
         return RTOS_OK;
     }
     return RTOS_ERR;

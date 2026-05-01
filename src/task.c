@@ -40,6 +40,7 @@ _Static_assert(RTOS_MAX_PRIORITIES <= 32, "RTOS_MAX_PRIORITIES must be <= 32 (bi
 #if RTOS_NUM_CORES > 1
 
 static rtos_tcb_t  *g_ready[RTOS_NUM_CORES][RTOS_MAX_PRIORITIES];
+static rtos_tcb_t  *g_ready_tail[RTOS_NUM_CORES][RTOS_MAX_PRIORITIES];
 static uint32_t     g_ready_bitmap[RTOS_NUM_CORES];
 static rtos_tcb_t  *g_blocked[RTOS_NUM_CORES];
 rtos_tcb_t         *g_current[RTOS_NUM_CORES];
@@ -59,6 +60,7 @@ static uint8_t      g_idle_stack[RTOS_NUM_CORES][RTOS_IDLE_STACK_WORDS * RTOS_ST
 #else  // single-core
 
 static rtos_tcb_t  *g_ready[RTOS_MAX_PRIORITIES];
+static rtos_tcb_t  *g_ready_tail[RTOS_MAX_PRIORITIES];
 static uint32_t     g_ready_bitmap;
 static rtos_tcb_t  *g_blocked;
 rtos_tcb_t         *g_current;
@@ -140,17 +142,31 @@ RTOS_WEAK void rtos_trace_task_delete(rtos_tcb_t *t)       { (void)t; }
 //---------------------------------------------------------------------------
 // Add a task to the ready list and set its state to TASK_READY. Caller must 
 // be in critical section.
+//
+// O(1) tail-insertion via per-priority-bucket tail pointer (g_ready_tail).
 //---------------------------------------------------------------------------
 void ready_add(rtos_tcb_t *tcb)
 {
     tcb->state = TASK_READY;
+    tcb->next  = NULL;
+    uint8_t p = tcb->priority;
 #if RTOS_NUM_CORES > 1
     uint8_t c = tcb->core;
-    list_insert_tail(&g_ready[c][tcb->priority], tcb);
-    g_ready_bitmap[c] |= (1u << tcb->priority);
+    if (!g_ready[c][p]) {
+        g_ready[c][p] = tcb;
+    } else {
+        g_ready_tail[c][p]->next = tcb;
+    }
+    g_ready_tail[c][p] = tcb;
+    g_ready_bitmap[c] |= (1u << p);
 #else
-    list_insert_tail(&g_ready[tcb->priority], tcb);
-    g_ready_bitmap |= (1u << tcb->priority);
+    if (!g_ready[p]) {
+        g_ready[p] = tcb;
+    } else {
+        g_ready_tail[p]->next = tcb;
+    }
+    g_ready_tail[p] = tcb;
+    g_ready_bitmap |= (1u << p);
 #endif
 }
 
@@ -194,19 +210,42 @@ void rtos_task_make_ready(rtos_tcb_t *tcb)
 
 //---------------------------------------------------------------------------
 // Remove a task from the ready list. Caller must be in critical section.
+// Walks the bucket; updates the tail pointer if the removed task was the
+// tail of its bucket.
 //---------------------------------------------------------------------------
 void ready_remove(rtos_tcb_t *tcb)
 {
+    uint8_t p = tcb->priority;
 #if RTOS_NUM_CORES > 1
     uint8_t c = tcb->core;
-    list_remove(&g_ready[c][tcb->priority], tcb);
-    if (!g_ready[c][tcb->priority])
-        g_ready_bitmap[c] &= ~(1u << tcb->priority);
+    rtos_tcb_t **head = &g_ready[c][p];
+    rtos_tcb_t **tail = &g_ready_tail[c][p];
 #else
-    list_remove(&g_ready[tcb->priority], tcb);
-    if (!g_ready[tcb->priority])
-        g_ready_bitmap &= ~(1u << tcb->priority);
+    rtos_tcb_t **head = &g_ready[p];
+    rtos_tcb_t **tail = &g_ready_tail[p];
 #endif
+
+    if (*head == tcb) {
+        *head = tcb->next;
+        if (!*head) {
+            *tail = NULL;
+#if RTOS_NUM_CORES > 1
+            g_ready_bitmap[c] &= ~(1u << p);
+#else
+            g_ready_bitmap &= ~(1u << p);
+#endif
+        } else if (*tail == tcb) {
+            *tail = NULL;  // shouldn't happen — head removed and head==tail handled above
+        }
+    } else {
+        rtos_tcb_t *prev = *head;
+        while (prev && prev->next != tcb) prev = prev->next;
+        if (prev) {
+            prev->next = tcb->next;
+            if (*tail == tcb) *tail = prev;
+        }
+    }
+    tcb->next = NULL;
 }
 
 //---------------------------------------------------------------------------
@@ -258,6 +297,7 @@ static rtos_handle_t task_create_impl(rtos_tcb_t *tcb,
     tcb->priority    = priority;
 #if RTOS_ENABLE_PRIORITY_INHERITANCE
     tcb->base_priority = priority;
+    tcb->held_mutexes  = NULL;
 #endif
     tcb->state       = TASK_READY;
     tcb->wakeup_tick = 0;
@@ -271,6 +311,7 @@ static rtos_handle_t task_create_impl(rtos_tcb_t *tcb,
 
 #if RTOS_ENABLE_TASK_NOTIFY
     tcb->notif_pending = 0;
+    tcb->notif_value   = 0;
 #endif
 
 #if RTOS_NUM_CORES > 1
@@ -513,24 +554,64 @@ void rtos_task_delay_until(rtos_tick_t *last_wake_tick, rtos_tick_t period_ticks
 // notification, unblock it immediately.
 //---------------------------------------------------------------------------
 #if RTOS_ENABLE_TASK_NOTIFY
+
+//---------------------------------------------------------------------------
+// Apply a notification action to a task. Returns 1 if the notification
+// should be delivered (pending set + waiter woken), 0 if not (only the
+// SET_NO_OVERWRITE-with-pending case rejects). Caller must hold critical
+// section.
+//---------------------------------------------------------------------------
+static int notify_apply(rtos_tcb_t *tcb, rtos_notify_action_t action, uint32_t value)
+{
+    switch (action) {
+        case RTOS_NOTIFY_NONE:
+            break;
+        case RTOS_NOTIFY_SET_BITS:
+            tcb->notif_value |= value;
+            break;
+        case RTOS_NOTIFY_INCREMENT:
+            tcb->notif_value++;
+            (void)value;
+            break;
+        case RTOS_NOTIFY_OVERWRITE:
+            tcb->notif_value = value;
+            break;
+        case RTOS_NOTIFY_SET_NO_OVERWRITE:
+            if (tcb->notif_pending) return 0;
+            tcb->notif_value = value;
+            break;
+        default:
+            return 0;
+    }
+    tcb->notif_pending = 1;
+    return 1;
+}
+
 void rtos_task_notify(rtos_handle_t task)
 {
+    (void)rtos_task_notify_value(task, RTOS_NOTIFY_NONE, 0);
+}
+
+int rtos_task_notify_value(rtos_handle_t task,
+                           rtos_notify_action_t action,
+                           uint32_t value)
+{
     rtos_tcb_t *tcb = (rtos_tcb_t *)task;
-    if (!tcb) return;
+    if (!tcb) return RTOS_ERR;
 
     port_enter_critical();
-    tcb->notif_pending = 1;
-
-    if (tcb->state == TASK_BLOCKED) {
+    int delivered = notify_apply(tcb, action, value);
+    if (delivered && tcb->state == TASK_BLOCKED) {
         if (tcb->ipc_wait) {
             list_remove(tcb->ipc_wait, tcb);
             tcb->ipc_wait = NULL;
         }
         rtos_task_make_ready(tcb);
     }
-
     port_exit_critical();
-    port_request_reschedule();
+
+    if (delivered) port_request_reschedule();
+    return delivered ? RTOS_OK : RTOS_ERR;
 }
 
 //---------------------------------------------------------------------------
@@ -539,10 +620,18 @@ void rtos_task_notify(rtos_handle_t task)
 //---------------------------------------------------------------------------
 void rtos_task_notify_from_isr(rtos_handle_t task)
 {
-    rtos_tcb_t *tcb = (rtos_tcb_t *)task;
-    if (!tcb) return;
+    (void)rtos_task_notify_value_from_isr(task, RTOS_NOTIFY_NONE, 0);
+}
 
-    tcb->notif_pending = 1;
+int rtos_task_notify_value_from_isr(rtos_handle_t task,
+                                    rtos_notify_action_t action,
+                                    uint32_t value)
+{
+    rtos_tcb_t *tcb = (rtos_tcb_t *)task;
+    if (!tcb) return RTOS_ERR;
+
+    int delivered = notify_apply(tcb, action, value);
+    if (!delivered) return RTOS_ERR;
 
     if (tcb->state == TASK_BLOCKED) {
         if (tcb->ipc_wait) {
@@ -552,6 +641,7 @@ void rtos_task_notify_from_isr(rtos_handle_t task)
         rtos_task_make_ready(tcb);
         port_request_reschedule();
     }
+    return RTOS_OK;
 }
 
 //---------------------------------------------------------------------------
@@ -560,11 +650,24 @@ void rtos_task_notify_from_isr(rtos_handle_t task)
 //---------------------------------------------------------------------------
 int rtos_task_notify_wait(rtos_tick_t timeout_ticks)
 {
+    return rtos_task_notify_wait_value(0, 0, NULL, timeout_ticks);
+}
+
+int rtos_task_notify_wait_value(uint32_t clear_on_entry,
+                                uint32_t clear_on_exit,
+                                uint32_t *value_out,
+                                rtos_tick_t timeout_ticks)
+{
     port_enter_critical();
+
+    G_CURRENT->notif_value &= ~clear_on_entry;
 
     if (G_CURRENT->notif_pending) {
         G_CURRENT->notif_pending = 0;
+        uint32_t v = G_CURRENT->notif_value;
+        G_CURRENT->notif_value &= ~clear_on_exit;
         port_exit_critical();
+        if (value_out) *value_out = v;
         return RTOS_OK;
     }
 
@@ -587,8 +690,11 @@ int rtos_task_notify_wait(rtos_tick_t timeout_ticks)
     port_enter_critical();
     int notified = G_CURRENT->notif_pending;
     G_CURRENT->notif_pending = 0;
+    uint32_t v = G_CURRENT->notif_value;
+    if (notified) G_CURRENT->notif_value &= ~clear_on_exit;
     port_exit_critical();
 
+    if (notified && value_out) *value_out = v;
     return notified ? RTOS_OK : RTOS_TIMEOUT;
 }
 #endif // RTOS_ENABLE_TASK_NOTIFY (notify, notify_from_isr, notify_wait)
@@ -663,14 +769,22 @@ size_t rtos_task_get_runtime_stats(rtos_runtime_stat_t *buf, size_t n)
 #if RTOS_STACK_OVERFLOW_CHECK
 static void idle_check_all_stacks(void)
 {
+    // Snapshot count + each TCB pointer under the critical section so a
+    // concurrent rtos_task_delete (which swaps the tail into a freed slot)
+    // can't make us deref a moved-out entry.
+    rtos_tcb_t *snapshot[RTOS_MAX_TASKS];
+    size_t count;
+
     port_enter_critical();
-    size_t count = g_all_tasks_count;
+    count = g_all_tasks_count;
+    for (size_t i = 0; i < count; i++)
+        snapshot[i] = g_all_tasks[i];
     port_exit_critical();
 
     for (size_t i = 0; i < count; i++) {
-        uint32_t *p = (uint32_t *)g_all_tasks[i]->stack_base;
-        if (p[0] != STACK_SENTINEL_WORD)
-            rtos_stack_overflow_hook(g_all_tasks[i]);
+        uint32_t *p = (uint32_t *)snapshot[i]->stack_base;
+        if (p && p[0] != STACK_SENTINEL_WORD)
+            rtos_stack_overflow_hook(snapshot[i]);
     }
 }
 #endif

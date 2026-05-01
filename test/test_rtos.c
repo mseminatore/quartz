@@ -184,6 +184,65 @@ static void test_queue(void)
     TEST(rtos_queue_messages_waiting(h) == 0);
 }
 
+//---------------------------------------------------------------------------
+// L3: queue API extras — peek, send_to_front, spaces_available.
+//---------------------------------------------------------------------------
+static void test_queue_extras(void)
+{
+    SUITE("queue extras (peek / send_to_front / spaces_available)");
+
+    static rtos_queue_t q;
+    static uint8_t      buf[4 * sizeof(int)];
+    rtos_handle_t h = rtos_queue_create(&q, buf, sizeof(int), 4);
+
+    TEST(rtos_queue_spaces_available(h) == 4);
+    TEST(rtos_queue_messages_waiting(h) == 0);
+
+    int val;
+    // Peek on empty returns TIMEOUT (no-wait).
+    TEST(rtos_queue_peek(h, &val, RTOS_NO_WAIT) == RTOS_TIMEOUT);
+
+    int a = 1, b = 2, c = 3;
+    TEST(rtos_queue_send(h, &a, RTOS_NO_WAIT) == RTOS_OK);  // [1]
+    TEST(rtos_queue_send(h, &b, RTOS_NO_WAIT) == RTOS_OK);  // [1,2]
+    TEST(rtos_queue_spaces_available(h) == 2);
+
+    // Peek does not consume.
+    TEST(rtos_queue_peek(h, &val, RTOS_NO_WAIT) == RTOS_OK);
+    TEST(val == 1);
+    TEST(rtos_queue_messages_waiting(h) == 2);
+    TEST(rtos_queue_peek(h, &val, RTOS_NO_WAIT) == RTOS_OK);
+    TEST(val == 1);
+
+    // send_to_front prepends.
+    TEST(rtos_queue_send_to_front(h, &c, RTOS_NO_WAIT) == RTOS_OK);  // [3,1,2]
+    TEST(rtos_queue_messages_waiting(h) == 3);
+    TEST(rtos_queue_spaces_available(h) == 1);
+
+    TEST(rtos_queue_peek(h, &val, RTOS_NO_WAIT) == RTOS_OK);
+    TEST(val == 3);
+
+    // Drain in expected order: 3,1,2.
+    TEST(rtos_queue_receive(h, &val, RTOS_NO_WAIT) == RTOS_OK); TEST(val == 3);
+    TEST(rtos_queue_receive(h, &val, RTOS_NO_WAIT) == RTOS_OK); TEST(val == 1);
+    TEST(rtos_queue_receive(h, &val, RTOS_NO_WAIT) == RTOS_OK); TEST(val == 2);
+
+    TEST(rtos_queue_spaces_available(h) == 4);
+
+    // send_to_front on full returns TIMEOUT.
+    int x = 0;
+    for (int i = 0; i < 4; i++) TEST(rtos_queue_send(h, &x, RTOS_NO_WAIT) == RTOS_OK);
+    TEST(rtos_queue_send_to_front(h, &x, RTOS_NO_WAIT) == RTOS_TIMEOUT);
+
+    // Wrap-around: drain partially, send_to_front, verify head wrap.
+    TEST(rtos_queue_receive(h, &val, RTOS_NO_WAIT) == RTOS_OK);
+    TEST(rtos_queue_receive(h, &val, RTOS_NO_WAIT) == RTOS_OK);
+    int z = 77;
+    TEST(rtos_queue_send_to_front(h, &z, RTOS_NO_WAIT) == RTOS_OK);
+    TEST(rtos_queue_peek(h, &val, RTOS_NO_WAIT) == RTOS_OK);
+    TEST(val == 77);
+}
+
 static void test_list_sorted(void)
 {
     SUITE("list insert sorted");
@@ -519,9 +578,10 @@ static void test_priority_inheritance(void)
     TEST(r == RTOS_TIMEOUT);
 
     // After the timeout, the waiter removed itself from wait_list.
-    // Owner priority was boosted inside rtos_mutex_lock and remains boosted
-    // until the owner unlocks (single-level implementation).
-    TEST(low_tcb.priority == 0);  // boosted to high_tcb's priority
+    // With multi-mutex-aware PI restoration, the owner's priority is
+    // recomputed on waiter timeout and drops back to base since no waiter
+    // remains to justify a boost.
+    TEST(low_tcb.priority == 3);
     TEST(low_tcb.base_priority == 3);  // base unchanged
 
     // Owner unlocks: priority restored before transferring ownership
@@ -533,7 +593,207 @@ static void test_priority_inheritance(void)
 
     g_current = NULL;
 }
+
+//---------------------------------------------------------------------------
+// H1: a task holding multiple mutexes must keep its boost until *all*
+// boosting waiters are gone. Releasing one mutex must not prematurely drop
+// a boost that another held mutex still justifies.
+//
+// On the host stubs there's no real scheduler, so we construct the scenario
+// directly by manipulating wait lists and priorities, then exercise the
+// recompute-on-unlock path.
+//---------------------------------------------------------------------------
+static void test_priority_inheritance_multi_mutex(void)
+{
+    SUITE("priority inheritance — multi-mutex");
+
+    g_blocked = NULL;
+    g_tick_count = 0;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+
+    static rtos_tcb_t low_tcb, mid_tcb, high_tcb;
+    static uint32_t   low_stack[64], mid_stack[64], high_stack[64];
+
+    rtos_task_create(&low_tcb,  low_stack,  64, (void(*)(void*))1, NULL, "low",  5);
+    rtos_task_create(&mid_tcb,  mid_stack,  64, (void(*)(void*))1, NULL, "mid",  2);
+    rtos_task_create(&high_tcb, high_stack, 64, (void(*)(void*))1, NULL, "high", 0);
+    // Pull the helper tasks off the ready queue — we are simulating them as blocked.
+    ready_remove(&mid_tcb);  mid_tcb.state  = TASK_BLOCKED;
+    ready_remove(&high_tcb); high_tcb.state = TASK_BLOCKED;
+
+    static rtos_mutex_t m_a, m_b;
+    rtos_handle_t ha = rtos_mutex_create(&m_a);
+    rtos_handle_t hb = rtos_mutex_create(&m_b);
+
+    // Low takes both mutexes — both should land on its held list.
+    g_current = &low_tcb;
+    low_tcb.state = TASK_RUNNING;
+    rtos_mutex_lock(ha, RTOS_NO_WAIT);
+    rtos_mutex_lock(hb, RTOS_NO_WAIT);
+    TEST(m_a.owner == &low_tcb);
+    TEST(m_b.owner == &low_tcb);
+    TEST(low_tcb.priority == 5);
+    TEST(low_tcb.held_mutexes != NULL);
+
+    // Simulate high blocking on m_a and mid blocking on m_b. Insert sorted
+    // by priority; this mirrors what rtos_mutex_lock does internally.
+    list_insert_sorted(&m_a.wait_list, &high_tcb, high_tcb.priority);
+    list_insert_sorted(&m_b.wait_list, &mid_tcb,  mid_tcb.priority);
+
+    // Apply the boost low would have received from high (the strongest waiter).
+    low_tcb.priority = 0;
+
+    // Low releases m_a. Owner becomes high; low's effective priority must
+    // recompute to mid's (2) — NOT all the way back to base (5).
+    rtos_mutex_unlock(ha);
+    TEST(m_a.owner == &high_tcb);
+    TEST(low_tcb.priority == 2);
+    TEST(low_tcb.base_priority == 5);
+    TEST(high_tcb.held_mutexes == &m_a);
+
+    // Low releases m_b. Owner becomes mid; low has no held mutexes left,
+    // so its priority returns all the way to base.
+    rtos_mutex_unlock(hb);
+    TEST(m_b.owner == &mid_tcb);
+    TEST(low_tcb.priority == 5);
+    TEST(low_tcb.held_mutexes == NULL);
+    TEST(mid_tcb.held_mutexes == &m_b);
+
+    // Tear down: have the new owners release so subsequent suites see clean state.
+    g_current = &high_tcb; high_tcb.state = TASK_RUNNING;
+    rtos_mutex_unlock(ha);
+    g_current = &mid_tcb;  mid_tcb.state  = TASK_RUNNING;
+    rtos_mutex_unlock(hb);
+
+    g_current = NULL;
+}
+
+//---------------------------------------------------------------------------
+// H1 corollary: when a waiter times out, the owner's priority must be
+// recomputed (boost dropped if no other waiter justifies it).
+//---------------------------------------------------------------------------
+static void test_priority_inheritance_timeout_drops_boost(void)
+{
+    SUITE("priority inheritance — timeout drops boost");
+
+    g_blocked = NULL;
+    g_tick_count = 0;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+
+    static rtos_tcb_t low_tcb2, high_tcb2;
+    static uint32_t   ls2[64], hs2[64];
+
+    rtos_task_create(&low_tcb2,  ls2, 64, (void(*)(void*))1, NULL, "low2",  3);
+    rtos_task_create(&high_tcb2, hs2, 64, (void(*)(void*))1, NULL, "high2", 0);
+
+    static rtos_mutex_t mtx2;
+    rtos_handle_t mh2 = rtos_mutex_create(&mtx2);
+    g_current = &low_tcb2;
+    low_tcb2.state = TASK_RUNNING;
+    rtos_mutex_lock(mh2, RTOS_NO_WAIT);
+    TEST(low_tcb2.priority == 3);
+
+    g_current = &high_tcb2;
+    high_tcb2.state = TASK_RUNNING;
+    int r = rtos_mutex_lock(mh2, 1);
+    TEST(r == RTOS_TIMEOUT);
+
+    // After timeout there are no waiters on the mutex, so the boost should
+    // have been dropped during the cleanup path.
+    TEST(low_tcb2.priority == 3);
+    TEST(low_tcb2.base_priority == 3);
+
+    g_current = &low_tcb2;
+    low_tcb2.state = TASK_RUNNING;
+    rtos_mutex_unlock(mh2);
+    g_current = NULL;
+}
 #endif // RTOS_ENABLE_PRIORITY_INHERITANCE
+
+#if RTOS_ENABLE_RECURSIVE_MUTEX
+//---------------------------------------------------------------------------
+// L1: recursive mutex — same task may lock multiple times; must unlock the
+// same number of times before another task can acquire.
+//---------------------------------------------------------------------------
+static void test_mutex_recursive(void)
+{
+    SUITE("recursive mutex");
+
+    g_blocked = NULL;
+    g_tick_count = 0;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+
+    static rtos_tcb_t a_tcb, b_tcb;
+    static uint32_t   as[64], bs[64];
+    rtos_task_create(&a_tcb, as, 64, (void(*)(void*))1, NULL, "a", 2);
+    rtos_task_create(&b_tcb, bs, 64, (void(*)(void*))1, NULL, "b", 2);
+
+    static rtos_mutex_t rm;
+    rtos_handle_t h = rtos_mutex_create_recursive(&rm);
+    TEST(h != NULL);
+    TEST(rm.recursive == 1);
+    TEST(rm.nest_count == 0);
+
+    g_current = &a_tcb;
+    a_tcb.state = TASK_RUNNING;
+
+    // Lock 3 times by same task.
+    TEST(rtos_mutex_lock(h, RTOS_NO_WAIT) == RTOS_OK);
+    TEST(rm.nest_count == 1);
+    TEST(rtos_mutex_lock(h, RTOS_NO_WAIT) == RTOS_OK);
+    TEST(rm.nest_count == 2);
+    TEST(rtos_mutex_lock(h, RTOS_NO_WAIT) == RTOS_OK);
+    TEST(rm.nest_count == 3);
+    TEST(rm.owner == &a_tcb);
+
+    // Other task cannot acquire while held.
+    g_current = &b_tcb;
+    b_tcb.state = TASK_RUNNING;
+    TEST(rtos_mutex_lock(h, RTOS_NO_WAIT) == RTOS_TIMEOUT);
+    TEST(rm.owner == &a_tcb);
+
+    // Unlock from non-owner fails.
+    TEST(rtos_mutex_unlock(h) == RTOS_ERR);
+
+    // Owner unlocks 2 of 3 — still owned.
+    g_current = &a_tcb;
+    a_tcb.state = TASK_RUNNING;
+    TEST(rtos_mutex_unlock(h) == RTOS_OK);
+    TEST(rm.nest_count == 2);
+    TEST(rm.owner == &a_tcb);
+    TEST(rtos_mutex_unlock(h) == RTOS_OK);
+    TEST(rm.nest_count == 1);
+    TEST(rm.owner == &a_tcb);
+
+    // Final unlock releases.
+    TEST(rtos_mutex_unlock(h) == RTOS_OK);
+    TEST(rm.owner == NULL);
+    TEST(rm.nest_count == 0);
+
+    // Now the other task can acquire.
+    g_current = &b_tcb;
+    b_tcb.state = TASK_RUNNING;
+    TEST(rtos_mutex_lock(h, RTOS_NO_WAIT) == RTOS_OK);
+    TEST(rm.owner == &b_tcb);
+    TEST(rm.nest_count == 1);
+    rtos_mutex_unlock(h);
+
+    // Non-recursive mutex re-lock by owner returns TIMEOUT (NO_WAIT path):
+    static rtos_mutex_t nr;
+    rtos_handle_t nh = rtos_mutex_create(&nr);
+    TEST(nr.recursive == 0);
+    g_current = &a_tcb;
+    a_tcb.state = TASK_RUNNING;
+    TEST(rtos_mutex_lock(nh, RTOS_NO_WAIT) == RTOS_OK);
+    TEST(rtos_mutex_lock(nh, RTOS_NO_WAIT) == RTOS_TIMEOUT);
+    rtos_mutex_unlock(nh);
+
+    g_current = NULL;
+}
+#endif // RTOS_ENABLE_RECURSIVE_MUTEX
 
 #if RTOS_ENABLE_SOFTWARE_TIMERS
 static void test_timers(void)
@@ -573,6 +833,78 @@ static void test_timers(void)
     TEST(ptimer.active == 1);             // still active
     rtos_timer_stop(ph);
     TEST(ptimer.active == 0);
+}
+
+//---------------------------------------------------------------------------
+// M8: timer callbacks may call rtos_timer_reset() / rtos_timer_stop() on
+// themselves without corrupting the active list or g_timer_count.
+//---------------------------------------------------------------------------
+static rtos_handle_t g_self_reset_handle;
+static int           g_self_reset_count;
+static int           g_self_reset_limit;
+static void self_reset_cb(rtos_handle_t t)
+{
+    (void)t;
+    g_self_reset_count++;
+    if (g_self_reset_count < g_self_reset_limit)
+        rtos_timer_reset(g_self_reset_handle);
+    // After limit, do nothing (one-shot lapses naturally).
+}
+
+static rtos_handle_t g_self_stop_handle;
+static int           g_self_stop_count;
+static void self_stop_cb(rtos_handle_t t)
+{
+    (void)t;
+    g_self_stop_count++;
+    rtos_timer_stop(g_self_stop_handle);
+}
+
+static void test_timer_self_reset(void)
+{
+    SUITE("timer self-reset/stop in callback");
+
+    g_tick_count = 0;
+    g_self_reset_count = 0;
+    g_self_reset_limit = 3;
+
+    static rtos_timer_t srt;
+    g_self_reset_handle = rtos_timer_create(&srt, "sr", 2, 0 /* one-shot */, self_reset_cb);
+    rtos_timer_start(g_self_reset_handle);
+    TEST(srt.active == 1);
+
+    // Each fire should trigger another 2-tick countdown until limit reached.
+    for (int i = 0; i < 10; i++) {
+        g_tick_count++;
+        rtos_timer_tick(g_tick_count);
+    }
+    TEST(g_self_reset_count == 3);
+    TEST(srt.active == 0);            // last fire didn't re-arm; one-shot
+
+    // Confirm the count accounting is balanced — should be able to start
+    // a fresh batch of timers up to RTOS_MAX_TIMERS.
+    static rtos_timer_t fill[RTOS_MAX_TIMERS];
+    int created = 0;
+    for (int i = 0; i < RTOS_MAX_TIMERS; i++) {
+        rtos_handle_t h = rtos_timer_create(&fill[i], "f", 100, 0, timer_cb);
+        rtos_timer_start(h);
+        if (fill[i].active) created++;
+    }
+    TEST(created == RTOS_MAX_TIMERS);
+    for (int i = 0; i < RTOS_MAX_TIMERS; i++) rtos_timer_stop((rtos_handle_t)&fill[i]);
+
+    // Periodic + self-stop in callback.
+    g_self_stop_count = 0;
+    static rtos_timer_t sst;
+    g_self_stop_handle = rtos_timer_create(&sst, "ss", 2, 1 /* periodic */, self_stop_cb);
+    rtos_timer_start(g_self_stop_handle);
+    g_tick_count++; rtos_timer_tick(g_tick_count);
+    g_tick_count++; rtos_timer_tick(g_tick_count);   // fires, callback stops it
+    TEST(g_self_stop_count == 1);
+    TEST(sst.active == 0);
+    g_tick_count++; rtos_timer_tick(g_tick_count);
+    g_tick_count++; rtos_timer_tick(g_tick_count);
+    TEST(g_self_stop_count == 1);                   // does not fire again
 }
 #endif // RTOS_ENABLE_SOFTWARE_TIMERS
 
@@ -1086,6 +1418,83 @@ static void test_notify_clear(void)
     nc_tcb.state = TASK_RUNNING;
     int r = rtos_task_notify_wait(RTOS_NO_WAIT);
     TEST(r == RTOS_TIMEOUT);
+
+    g_current = NULL;
+}
+
+//---------------------------------------------------------------------------
+// L2: value-passing notifications — set bits, increment, overwrite,
+// no-overwrite, and clear-on-entry/exit semantics.
+//---------------------------------------------------------------------------
+static void test_notify_value(void)
+{
+    SUITE("task notify value (set/increment/overwrite)");
+
+    static rtos_tcb_t nv_tcb;
+    static uint32_t   nv_stack[64];
+    rtos_handle_t h = rtos_task_create(&nv_tcb, nv_stack, 64,
+                                        (void(*)(void*))1, NULL, "nv", 2);
+    g_current = &nv_tcb;
+    nv_tcb.state = TASK_RUNNING;
+    nv_tcb.notif_pending = 0;
+    nv_tcb.notif_value   = 0;
+
+    uint32_t v = 0;
+
+    TEST(rtos_task_notify_value(h, RTOS_NOTIFY_SET_BITS, 0x1) == RTOS_OK);
+    TEST(rtos_task_notify_value(h, RTOS_NOTIFY_SET_BITS, 0x4) == RTOS_OK);
+    TEST(nv_tcb.notif_pending == 1);
+    TEST(nv_tcb.notif_value == 0x5);
+
+    TEST(rtos_task_notify_wait_value(0, 0, &v, RTOS_NO_WAIT) == RTOS_OK);
+    TEST(v == 0x5);
+    TEST(nv_tcb.notif_pending == 0);
+    TEST(nv_tcb.notif_value == 0x5);
+
+    rtos_task_notify_value(h, RTOS_NOTIFY_SET_BITS, 0x10);
+    TEST(rtos_task_notify_wait_value(0, 0xFFFFFFFFu, &v, RTOS_NO_WAIT) == RTOS_OK);
+    TEST(v == 0x15);
+    TEST(nv_tcb.notif_value == 0);
+
+    rtos_task_notify_value(h, RTOS_NOTIFY_INCREMENT, 0);
+    rtos_task_notify_value(h, RTOS_NOTIFY_INCREMENT, 0);
+    rtos_task_notify_value(h, RTOS_NOTIFY_INCREMENT, 0);
+    TEST(nv_tcb.notif_value == 3);
+    TEST(rtos_task_notify_wait_value(0, 0, &v, RTOS_NO_WAIT) == RTOS_OK);
+    TEST(v == 3);
+
+    nv_tcb.notif_value = 0xAA;
+    nv_tcb.notif_pending = 0;
+    rtos_task_notify_value(h, RTOS_NOTIFY_OVERWRITE, 0x42);
+    TEST(nv_tcb.notif_value == 0x42);
+    TEST(nv_tcb.notif_pending == 1);
+    rtos_task_notify_value(h, RTOS_NOTIFY_OVERWRITE, 0x99);
+    TEST(nv_tcb.notif_value == 0x99);
+
+    rtos_task_notify_clear();
+    nv_tcb.notif_value = 0;
+    TEST(rtos_task_notify_value(h, RTOS_NOTIFY_SET_NO_OVERWRITE, 0x77) == RTOS_OK);
+    TEST(nv_tcb.notif_value == 0x77);
+    TEST(rtos_task_notify_value(h, RTOS_NOTIFY_SET_NO_OVERWRITE, 0xAA) == RTOS_ERR);
+    TEST(nv_tcb.notif_value == 0x77);
+    rtos_task_notify_clear();
+
+    nv_tcb.notif_value = 0;
+    rtos_task_notify_value(h, RTOS_NOTIFY_SET_BITS, 0xF0);
+    TEST(rtos_task_notify_wait_value(0xF0, 0, &v, RTOS_NO_WAIT) == RTOS_OK);
+    TEST(v == 0);
+
+    nv_tcb.notif_value = 0x55;
+    rtos_task_notify_value(h, RTOS_NOTIFY_NONE, 0);
+    TEST(nv_tcb.notif_pending == 1);
+    TEST(nv_tcb.notif_value == 0x55);
+    TEST(rtos_task_notify_wait_value(0, 0, &v, RTOS_NO_WAIT) == RTOS_OK);
+    TEST(v == 0x55);
+
+    nv_tcb.notif_value = 0;
+    rtos_task_notify(h);
+    TEST(nv_tcb.notif_pending == 1);
+    TEST(rtos_task_notify_wait(RTOS_NO_WAIT) == RTOS_OK);
 
     g_current = NULL;
 }
@@ -1980,8 +2389,10 @@ void test_main(int argc, char *argv[])
     test_semaphore();
     test_mutex();
     test_queue();
+    test_queue_extras();
 #if RTOS_ENABLE_SOFTWARE_TIMERS
     test_timers();
+    test_timer_self_reset();
 #endif
 #if RTOS_ENABLE_TASK_NOTIFY
     test_task_notify();
@@ -1992,6 +2403,11 @@ void test_main(int argc, char *argv[])
     test_ipc_timeout();
 #if RTOS_ENABLE_PRIORITY_INHERITANCE
     test_priority_inheritance();
+    test_priority_inheritance_multi_mutex();
+    test_priority_inheritance_timeout_drops_boost();
+#endif
+#if RTOS_ENABLE_RECURSIVE_MUTEX
+    test_mutex_recursive();
 #endif
     test_tick_wraparound();
     test_queue_blocking_send();
@@ -2011,6 +2427,7 @@ void test_main(int argc, char *argv[])
     test_task_inspection();
 #if RTOS_ENABLE_TASK_NOTIFY
     test_notify_clear();
+    test_notify_value();
 #endif
     test_sem_take_from_isr();
 #if RTOS_ENABLE_TASK_DELETE

@@ -30,6 +30,8 @@ enum Priority {
 };
 
 // Task Control Block — storage provided by the user as a static variable
+struct rtos_mutex;  // forward decl for held-mutex list
+
 typedef struct rtos_tcb {
     void               *sp;                      // saved stack pointer (port-specific type)
 #if RTOS_STACK_OVERFLOW_CHECK || RTOS_STACK_WATERMARK
@@ -39,6 +41,7 @@ typedef struct rtos_tcb {
     uint8_t             priority;
 #if RTOS_ENABLE_PRIORITY_INHERITANCE
     uint8_t             base_priority;           // original priority before any inheritance boost
+    struct rtos_mutex  *held_mutexes;            // intrusive list of mutexes currently owned
 #endif
     rtos_task_state_t   state;
     rtos_tick_t         wakeup_tick;             // absolute tick at which task should unblock
@@ -47,6 +50,7 @@ typedef struct rtos_tcb {
     struct rtos_tcb    *next;                    // intrusive list link
 #if RTOS_ENABLE_TASK_NOTIFY
     uint8_t             notif_pending;           // non-zero if a notification is waiting
+    uint32_t            notif_value;             // notification value (set/increment/overwrite)
 #endif
     uint8_t             on_blocked;              // non-zero when on the per-core blocked list
     struct rtos_tcb   **ipc_wait;               // pointer to the IPC wait-list head this task is on (NULL if none)
@@ -137,6 +141,41 @@ int rtos_task_notify_wait(rtos_tick_t timeout_ticks);
 // Clear a pending task notification on the calling task without blocking.
 // Useful for draining a stale notification before a fresh wait loop.
 void rtos_task_notify_clear(void);
+
+// ---------------------------------------------------------------------------
+// Value-passing notifications (FreeRTOS-style). Each task carries a 32-bit
+// notification value that the sender can set, OR with bits, increment, or
+// overwrite. The waiter can read and selectively clear bits before/after
+// receiving the value.
+// ---------------------------------------------------------------------------
+typedef enum {
+    RTOS_NOTIFY_NONE              = 0,  // mark pending; do not touch value
+    RTOS_NOTIFY_SET_BITS          = 1,  // value |= bits
+    RTOS_NOTIFY_INCREMENT         = 2,  // value++ (counting semantics)
+    RTOS_NOTIFY_OVERWRITE         = 3,  // value = bits (always)
+    RTOS_NOTIFY_SET_NO_OVERWRITE  = 4   // value = bits only if not pending
+} rtos_notify_action_t;
+
+// Send a value-bearing notification to a task. Returns RTOS_OK on success,
+// RTOS_ERR if action == SET_NO_OVERWRITE and a notification is already
+// pending (the value is left untouched in that case).
+int  rtos_task_notify_value(rtos_handle_t task,
+                            rtos_notify_action_t action,
+                            uint32_t value);
+
+// ISR-safe version of rtos_task_notify_value.
+int  rtos_task_notify_value_from_isr(rtos_handle_t task,
+                                     rtos_notify_action_t action,
+                                     uint32_t value);
+
+// Wait for a value-bearing notification. Before checking for a pending
+// notification, value &= ~clear_on_entry. On successful return,
+// *value_out (if non-NULL) receives the notification value, then
+// value &= ~clear_on_exit. Returns RTOS_OK or RTOS_TIMEOUT.
+int rtos_task_notify_wait_value(uint32_t clear_on_entry,
+                                uint32_t clear_on_exit,
+                                uint32_t *value_out,
+                                rtos_tick_t timeout_ticks);
 
 #endif // RTOS_ENABLE_TASK_NOTIFY
 

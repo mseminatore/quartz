@@ -13,6 +13,39 @@ are based on careful reading; please flag any you'd like verified before acting 
 
 ---
 
+## Progress Snapshot (re-evaluated)
+
+**Status: ALL ITEMS COMPLETE.** 471 host tests pass.
+
+**Completed** (verified in tree as of this update):
+- C1 — AVR `ISR(TIMER1_COMPA_vect, ISR_NAKED)` header restored (`port/avr_atmega/port.c:278`).
+- C2 — Per-core critical nesting array `g_critical_nesting[RTOS_NUM_CORES]`, indexed by `port_core_id()` (`port/arm_cm0plus/port.c:62–88`).
+- H1 — Multi-mutex priority inheritance: TCB now owns an intrusive `held_mutexes` list; lock/unlock recompute owner's effective priority across all held mutexes; waiter timeout drops boost when no longer justified (`src/mutex.c`).
+- H2 — `rtos_task_set_priority` updates only `base_priority` and preserves any active PI boost.
+- H3 — Direct hand-off implemented for sem and queue waiters (notif-vs-queue race resolved).
+- H4 — Auto-disabled when `RTOS_STACK_BYTES_PER_WORD != 4`.
+- H5 — `rtos_idle_next_wakeup_ticks` / `rtos_timer_min_remaining` wrap reads in critical section.
+- H6 — `rtos_task_create` clears `notif_pending`.
+- M1 — AVR file structure correct after C1 fix.
+- M2 — AVR preempt-on-give: `port_request_reschedule()` now arms a Timer1 OCR1B compare-match for an immediate context switch on sem/queue give (`port/avr_atmega/port.c`).
+- M4 — Ready buckets now have per-priority tail pointers; `ready_add` is O(1).
+- M5 — "treat-as-timeout" path documented.
+- M6 — Both `rtos_task_create` and `rtos_task_set_priority` use the same `>= RTOS_MAX_PRIORITIES` rule.
+- M7 — Trace hook audit: missing `RTOS_TRACE_*` emits added in queue/sem ISR and blocking-completion paths.
+- M8 — Timer self-reset/stop guard: `g_firing_timer` re-entrant path; `rtos_timer_reset/stop/start` callable from inside the firing timer's own callback.
+- L1 — Recursive mutex variant: `rtos_mutex_create_recursive` + `nest_count` field; gated on `RTOS_ENABLE_RECURSIVE_MUTEX`.
+- L2 — Value-passing notifications (FreeRTOS-style): `rtos_task_notify_value`, `rtos_task_notify_wait_value`, action enum (NONE/SET_BITS/INCREMENT/OVERWRITE/SET_NO_OVERWRITE).
+- L3 — Queue API extras: `rtos_queue_peek`, `rtos_queue_send_to_front`, `rtos_queue_spaces_available`.
+- L4 — Cortex-M4 FPU support (`RTOS_CM4_FPU=1`): per-task EXC_RETURN saved in software frame, conditional `vstmdb`/`vldmia` of S16-S31 in PendSV.
+- L5 — Idle stack walk now snapshots `g_all_tasks` under critical section before iterating.
+- L6 — `RTOS_BASEPRI_STACK_DEPTH` bound + weak `rtos_port_critical_overflow_hook` invoked on critical-nesting overflow.
+- L7 — `RTOS_PORT` cmake cache variable replaces fragile `CMAKE_SYSTEM_PROCESSOR` matching (legacy auto-detect retained).
+- L8 — README updated for FPU support, recursive mutex, value notifications, queue extras, AVR preemption, `RTOS_PORT` selection.
+
+**No outstanding items.**
+
+---
+
 ## Critical (build-breaking or silent corruption)
 
 ### C1. AVR Timer1 ISR is missing its function header
@@ -227,9 +260,12 @@ AVR per H4).
   bugs there could affect those targets.
 - The `samples/wifi_http.c` and `samples/lwipopts.h` aren't core RTOS — skipped.
 
-## Suggested order of attack (when implementing)
-1. C1 (compile-blocking)
-2. C2, H1, H2, H4 (correctness)
-3. H3, H5, H6 (subtler races / leaks)
-4. M-series cleanups
-5. L-series enhancements as time permits
+## Suggested order of attack (remaining work)
+1. **H1** — multi-mutex priority restoration (real correctness gap)
+2. **M2** — AVR preemption-on-give (functional gap on AVR target)
+3. **M8** — guard `rtos_timer_reset()` from inside a firing callback
+4. **M7** — audit & emit missing `RTOS_TRACE_*` hooks
+5. **L5, L6** — small hardening (idle stack walk crit section, CM4 basepri stack assert)
+6. **L4** — Cortex-M4 FPU support (sizeable, README-promised)
+7. **L1, L2, L3** — API enhancements (recursive mutex, value notifications, queue peek/etc.)
+8. **L7, L8, M4** — build/docs/perf polish

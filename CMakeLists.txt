@@ -61,34 +61,60 @@ endif()
 
 # Architecture detection (works in both standalone and subdirectory builds
 # because the toolchain file sets CMAKE_SYSTEM_PROCESSOR before project()).
+#
+# Selection precedence (highest first):
+#   1. -DRTOS_PORT=<name>          (explicit cache variable; recommended)
+#   2. CMAKE_SYSTEM_PROCESSOR      (set by the toolchain file; legacy path)
+#
+# Valid RTOS_PORT values: pico, avr, riscv, esp32s3, cm4, host (no port).
+# When unset, CMAKE_SYSTEM_PROCESSOR is consulted for backward compatibility.
 
-# Detect AVR cross-compile (toolchain file sets CMAKE_SYSTEM_PROCESSOR=avr)
-if(CMAKE_SYSTEM_PROCESSOR STREQUAL "avr")
+set(RTOS_PORT "" CACHE STRING
+    "Port to build (pico|avr|riscv|esp32s3|cm4|host). Empty = auto-detect.")
+set_property(CACHE RTOS_PORT PROPERTY STRINGS "" pico avr riscv esp32s3 cm4 host)
+
+# Resolve effective port: explicit RTOS_PORT wins; otherwise infer from
+# CMAKE_SYSTEM_PROCESSOR (set by the toolchain files).
+if(RTOS_PORT)
+    set(_rtos_port "${RTOS_PORT}")
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "avr")
+    set(_rtos_port "avr")
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "riscv")
+    set(_rtos_port "riscv")
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "xtensa-esp32s3")
+    set(_rtos_port "esp32s3")
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm_cm4")
+    set(_rtos_port "cm4")
+elseif(RTOS_TARGET_PICO)
+    set(_rtos_port "pico")
+else()
+    set(_rtos_port "host")
+endif()
+
+set(RTOS_TARGET_AVR     OFF)
+set(RTOS_TARGET_RISCV   OFF)
+set(RTOS_TARGET_ESP32S3 OFF)
+set(RTOS_TARGET_CM4     OFF)
+
+if(_rtos_port STREQUAL "pico")
+    set(RTOS_TARGET_PICO ON)
+elseif(_rtos_port STREQUAL "avr")
     set(RTOS_TARGET_AVR ON)
-else()
-    set(RTOS_TARGET_AVR OFF)
-endif()
-
-# Detect RISC-V cross-compile (toolchain file sets CMAKE_SYSTEM_PROCESSOR=riscv)
-if(CMAKE_SYSTEM_PROCESSOR STREQUAL "riscv")
+elseif(_rtos_port STREQUAL "riscv")
     set(RTOS_TARGET_RISCV ON)
-else()
-    set(RTOS_TARGET_RISCV OFF)
-endif()
-
-# Detect ESP32-S3 cross-compile (toolchain file sets CMAKE_SYSTEM_PROCESSOR=xtensa-esp32s3)
-if(CMAKE_SYSTEM_PROCESSOR STREQUAL "xtensa-esp32s3")
+elseif(_rtos_port STREQUAL "esp32s3")
     set(RTOS_TARGET_ESP32S3 ON)
+elseif(_rtos_port STREQUAL "cm4")
+    set(RTOS_TARGET_CM4 ON)
+elseif(_rtos_port STREQUAL "host")
+    # No port sources; host build (unit tests).
 else()
-    set(RTOS_TARGET_ESP32S3 OFF)
+    message(FATAL_ERROR
+        "Unknown RTOS_PORT='${_rtos_port}'. "
+        "Valid values: pico avr riscv esp32s3 cm4 host.")
 endif()
 
-# Detect ARM Cortex-M4 cross-compile (toolchain file sets CMAKE_SYSTEM_PROCESSOR=arm_cm4)
-if(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm_cm4")
-    set(RTOS_TARGET_CM4 ON)
-else()
-    set(RTOS_TARGET_CM4 OFF)
-endif()
+message(STATUS "rtos: selected port = ${_rtos_port}")
 
 # ---------------------------------------------------------------------------
 # RTOS library (architecture-independent kernel sources)

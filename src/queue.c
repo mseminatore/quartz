@@ -103,6 +103,7 @@ int rtos_queue_send(rtos_handle_t handle, const void *item, rtos_tick_t timeout_
         memcpy(q->buf + q->tail * q->item_size, item, q->item_size);
         q->tail = (q->tail + 1) % q->capacity;
         q->count++;
+        RTOS_TRACE_QUEUE_SEND(q);
         // Unblock a receiver that may have started waiting in the meantime.
         rtos_tcb_t *waiter = list_pop_head(&q->recv_wait);
         if (waiter) rtos_task_make_ready(waiter);
@@ -200,6 +201,7 @@ int rtos_queue_send_from_isr(rtos_handle_t handle, const void *item)
     memcpy(q->buf + q->tail * q->item_size, item, q->item_size);
     q->tail = (q->tail + 1) % q->capacity;
     q->count++;
+    RTOS_TRACE_QUEUE_SEND(q);
 
     rtos_tcb_t *waiter = list_pop_head(&q->recv_wait);
     if (waiter) {
@@ -223,6 +225,7 @@ int rtos_queue_receive_from_isr(rtos_handle_t handle, void *item)
     memcpy(item, q->buf + q->head * q->item_size, q->item_size);
     q->head = (q->head + 1) % q->capacity;
     q->count--;
+    RTOS_TRACE_QUEUE_RECEIVE(q);
 
     rtos_tcb_t *waiter = list_pop_head(&q->send_wait);
     if (waiter) {
@@ -240,4 +243,140 @@ size_t rtos_queue_messages_waiting(rtos_handle_t handle)
     size_t count = q->count;
     port_exit_critical();
     return count;
+}
+
+//---------------------------------------------------------------------------
+// Return the number of free slots in the queue.
+//---------------------------------------------------------------------------
+size_t rtos_queue_spaces_available(rtos_handle_t handle)
+{
+    rtos_queue_t *q = (rtos_queue_t *)handle;
+    if (!q) return 0;
+    port_enter_critical();
+    size_t free_slots = q->capacity - q->count;
+    port_exit_critical();
+    return free_slots;
+}
+
+//---------------------------------------------------------------------------
+// Peek at the head item without removing it. Blocks up to timeout_ticks if
+// the queue is empty. Does not unblock any senders (nothing was consumed).
+//---------------------------------------------------------------------------
+int rtos_queue_peek(rtos_handle_t handle, void *item, rtos_tick_t timeout_ticks)
+{
+    rtos_queue_t *q = (rtos_queue_t *)handle;
+    if (!q || !item) return RTOS_ERR;
+
+    port_enter_critical();
+
+    if (q->count > 0) {
+        memcpy(item, q->buf + q->head * q->item_size, q->item_size);
+        port_exit_critical();
+        return RTOS_OK;
+    }
+
+    if (timeout_ticks == RTOS_NO_WAIT) {
+        port_exit_critical();
+        return RTOS_TIMEOUT;
+    }
+
+    // Block on recv_wait: a sender will wake us, but we must NOT consume.
+    rtos_tcb_t *self = current_task();
+    self->state = TASK_BLOCKED;
+    self->ipc_wait = &q->recv_wait;
+    list_insert_sorted(&q->recv_wait, self, self->priority);
+    rtos_task_blocked_add(self, timeout_ticks);
+    port_exit_critical();
+
+    port_request_reschedule();
+
+    port_enter_critical();
+    int on_list = list_remove(&q->recv_wait, self);
+    if (on_list) {
+        rtos_task_blocked_remove(self);
+#if RTOS_ENABLE_TASK_NOTIFY
+    } else if (self->notif_pending) {
+        on_list = 1;
+#endif
+    } else if (q->count > 0) {
+        memcpy(item, q->buf + q->head * q->item_size, q->item_size);
+        // Re-arm the next receiver so the visible item still has a consumer
+        // path. (We were popped as the receiver but didn't consume; wake any
+        // other waiter so they may receive.)
+        rtos_tcb_t *next = list_pop_head(&q->recv_wait);
+        if (next) rtos_task_make_ready(next);
+    } else {
+        on_list = 1;
+    }
+    self->ipc_wait = NULL;
+    port_exit_critical();
+
+    return on_list ? RTOS_TIMEOUT : RTOS_OK;
+}
+
+//---------------------------------------------------------------------------
+// Send to the front of the queue (LIFO). Behaves like rtos_queue_send except
+// the new item is placed at the head, becoming the next item to be received.
+//---------------------------------------------------------------------------
+static void queue_write_front(rtos_queue_t *q, const void *item)
+{
+    // Move head one slot back (with wrap), then write into that slot.
+    q->head = (q->head == 0) ? (q->capacity - 1) : (q->head - 1);
+    memcpy(q->buf + q->head * q->item_size, item, q->item_size);
+    q->count++;
+}
+
+int rtos_queue_send_to_front(rtos_handle_t handle, const void *item, rtos_tick_t timeout_ticks)
+{
+    rtos_queue_t *q = (rtos_queue_t *)handle;
+    if (!q || !item) return RTOS_ERR;
+
+    port_enter_critical();
+
+    if (q->count < q->capacity) {
+        queue_write_front(q, item);
+
+        rtos_tcb_t *waiter = list_pop_head(&q->recv_wait);
+        if (waiter) rtos_task_make_ready(waiter);
+
+        port_exit_critical();
+        port_request_reschedule();
+        RTOS_TRACE_QUEUE_SEND(q);
+        return RTOS_OK;
+    }
+
+    if (timeout_ticks == RTOS_NO_WAIT) {
+        port_exit_critical();
+        return RTOS_TIMEOUT;
+    }
+
+    rtos_tcb_t *self = current_task();
+    self->state = TASK_BLOCKED;
+    self->ipc_wait = &q->send_wait;
+    list_insert_sorted(&q->send_wait, self, self->priority);
+    rtos_task_blocked_add(self, timeout_ticks);
+    port_exit_critical();
+
+    port_request_reschedule();
+
+    port_enter_critical();
+    int on_list = list_remove(&q->send_wait, self);
+    if (on_list) {
+        rtos_task_blocked_remove(self);
+#if RTOS_ENABLE_TASK_NOTIFY
+    } else if (self->notif_pending) {
+        on_list = 1;
+#endif
+    } else if (q->count < q->capacity) {
+        queue_write_front(q, item);
+        RTOS_TRACE_QUEUE_SEND(q);
+        rtos_tcb_t *waiter = list_pop_head(&q->recv_wait);
+        if (waiter) rtos_task_make_ready(waiter);
+    } else {
+        on_list = 1;
+    }
+    self->ipc_wait = NULL;
+    port_exit_critical();
+
+    return on_list ? RTOS_TIMEOUT : RTOS_OK;
 }

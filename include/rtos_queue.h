@@ -47,4 +47,17 @@ int rtos_queue_receive_from_isr(rtos_handle_t queue, void *item);
 // Return the number of items currently in the queue.
 size_t rtos_queue_messages_waiting(rtos_handle_t queue);
 
+// Return the number of free slots currently in the queue.
+size_t rtos_queue_spaces_available(rtos_handle_t queue);
+
+// Peek at the next item to be received without removing it from the queue.
+// Returns RTOS_OK on success, RTOS_ERR on bad arg, or RTOS_TIMEOUT if the
+// queue is empty (when timeout_ticks == RTOS_NO_WAIT or expired).
+int rtos_queue_peek(rtos_handle_t queue, void *item, rtos_tick_t timeout_ticks);
+
+// Send an item to the front of the queue (LIFO). Useful for high-priority
+// messages that should jump the queue. Same blocking semantics as
+// rtos_queue_send.
+int rtos_queue_send_to_front(rtos_handle_t queue, const void *item, rtos_tick_t timeout_ticks);
+
 #endif // RTOS_QUEUE_H

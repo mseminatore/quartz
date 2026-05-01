@@ -56,14 +56,28 @@ void port_exit_critical(void)
 }
 
 // ---------------------------------------------------------------------------
-// port_request_reschedule — no-op on AVR.
-// Context switching happens directly inside the Timer1 COMPA ISR; there is
-// no deferred PendSV equivalent on AVR.
+// port_request_reschedule — trigger a software context switch on AVR.
+//
+// Implemented by arming Timer1 compare-match B (OCR1B) to fire one timer
+// tick from "now". Because Timer1 is already running for the periodic tick,
+// we get an interrupt as soon as TCNT1 == OCR1B without disturbing the
+// COMPA periodic tick. The TIMER1_COMPB_vect ISR below performs only a
+// context switch (no tick advance).
+//
+// Safe to call from task context with interrupts enabled. A no-op is
+// preserved for nested calls (the OCIE1B bit set means a switch is already
+// pending). When called from within an ISR (e.g. rtos_semaphore_give_from_isr)
+// the request is similarly latched and serviced as soon as that ISR returns.
 // ---------------------------------------------------------------------------
 
 void port_request_reschedule(void)
 {
-    // Intentionally empty.
+    uint8_t sreg = SREG;
+    cli();
+    OCR1B = TCNT1 + 1;          // fire on the very next timer tick
+    TIFR1  = (1 << OCF1B);      // clear any stale match flag
+    TIMSK1 |= (1 << OCIE1B);    // enable the software-yield interrupt
+    SREG = sreg;
 }
 
 // ---------------------------------------------------------------------------
@@ -275,124 +289,134 @@ void port_start_first_task(void)
 // port_cpu_idle and port_core_id are provided by the weak stubs in task.c.
 // AVR sleep requires SM bits pre-configured by the application; the weak
 // no-op default is safe here since the tick ISR always wakes the CPU.
+
+// ---------------------------------------------------------------------------
+// Save/restore macros shared by the tick ISR (TIMER1_COMPA_vect) and the
+// software-yield ISR (TIMER1_COMPB_vect). Both perform the same context
+// save and restore around different middle work.
+// ---------------------------------------------------------------------------
+
+#define AVR_SAVE_CONTEXT()                              \
+        "push  r0                       \n"             \
+        "in    r0, __SREG__             \n"             \
+        "push  r0                       \n"             \
+        "push  r1                       \n"             \
+        "clr   r1                       \n"             \
+        "push  r2                       \n"             \
+        "push  r3                       \n"             \
+        "push  r4                       \n"             \
+        "push  r5                       \n"             \
+        "push  r6                       \n"             \
+        "push  r7                       \n"             \
+        "push  r8                       \n"             \
+        "push  r9                       \n"             \
+        "push  r10                      \n"             \
+        "push  r11                      \n"             \
+        "push  r12                      \n"             \
+        "push  r13                      \n"             \
+        "push  r14                      \n"             \
+        "push  r15                      \n"             \
+        "push  r16                      \n"             \
+        "push  r17                      \n"             \
+        "push  r18                      \n"             \
+        "push  r19                      \n"             \
+        "push  r20                      \n"             \
+        "push  r21                      \n"             \
+        "push  r22                      \n"             \
+        "push  r23                      \n"             \
+        "push  r24                      \n"             \
+        "push  r25                      \n"             \
+        "push  r26                      \n"             \
+        "push  r27                      \n"             \
+        "push  r28                      \n"             \
+        "push  r29                      \n"             \
+        "push  r30                      \n"             \
+        "push  r31                      \n"             \
+        "in    r28, __SP_L__            \n"             \
+        "in    r29, __SP_H__            \n"             \
+        "rcall rtos_current_tcb_ptr     \n"             \
+        "movw  r30, r24                 \n"             \
+        "ld    r26, Z+                  \n"             \
+        "ld    r27, Z                   \n"             \
+        "st    X+, r28                  \n"             \
+        "st    X,  r29                  \n"
+
+#define AVR_RESTORE_CONTEXT()                           \
+        "rcall rtos_current_tcb_ptr     \n"             \
+        "movw  r30, r24                 \n"             \
+        "ld    r26, Z+                  \n"             \
+        "ld    r27, Z                   \n"             \
+        "ld    r28, X+                  \n"             \
+        "ld    r29, X                   \n"             \
+        "out   __SP_H__, r29            \n"             \
+        "out   __SP_L__, r28            \n"             \
+        "pop   r31                      \n"             \
+        "pop   r30                      \n"             \
+        "pop   r29                      \n"             \
+        "pop   r28                      \n"             \
+        "pop   r27                      \n"             \
+        "pop   r26                      \n"             \
+        "pop   r25                      \n"             \
+        "pop   r24                      \n"             \
+        "pop   r23                      \n"             \
+        "pop   r22                      \n"             \
+        "pop   r21                      \n"             \
+        "pop   r20                      \n"             \
+        "pop   r19                      \n"             \
+        "pop   r18                      \n"             \
+        "pop   r17                      \n"             \
+        "pop   r16                      \n"             \
+        "pop   r15                      \n"             \
+        "pop   r14                      \n"             \
+        "pop   r13                      \n"             \
+        "pop   r12                      \n"             \
+        "pop   r11                      \n"             \
+        "pop   r10                      \n"             \
+        "pop   r9                       \n"             \
+        "pop   r8                       \n"             \
+        "pop   r7                       \n"             \
+        "pop   r6                       \n"             \
+        "pop   r5                       \n"             \
+        "pop   r4                       \n"             \
+        "pop   r3                       \n"             \
+        "pop   r2                       \n"             \
+        "pop   r1                       \n"             \
+        "pop   r0                       \n"             \
+        "out   __SREG__, r0             \n"             \
+        "pop   r0                       \n"             \
+        "reti                           \n"
+
 ISR(TIMER1_COMPA_vect, ISR_NAKED)
 {
     asm volatile (
-        // ----------------------------------------------------------------
-        // 1. Save context of the interrupted task.
-        // Push order matches the restore order in port_start_first_task
-        // and the frame built by port_init_stack.
-        // ----------------------------------------------------------------
-        "push  r0                       \n"  // save r0 (actual value)
-        "in    r0, __SREG__             \n"  // r0 = SREG
-        "push  r0                       \n"  // save SREG
-        "push  r1                       \n"
-        "clr   r1                       \n"  // r1 = 0  (GCC ABI: zero reg)
-        "push  r2                       \n"
-        "push  r3                       \n"
-        "push  r4                       \n"
-        "push  r5                       \n"
-        "push  r6                       \n"
-        "push  r7                       \n"
-        "push  r8                       \n"
-        "push  r9                       \n"
-        "push  r10                      \n"
-        "push  r11                      \n"
-        "push  r12                      \n"
-        "push  r13                      \n"
-        "push  r14                      \n"
-        "push  r15                      \n"
-        "push  r16                      \n"
-        "push  r17                      \n"
-        "push  r18                      \n"
-        "push  r19                      \n"
-        "push  r20                      \n"
-        "push  r21                      \n"
-        "push  r22                      \n"
-        "push  r23                      \n"
-        "push  r24                      \n"
-        "push  r25                      \n"
-        "push  r26                      \n"
-        "push  r27                      \n"
-        "push  r28                      \n"
-        "push  r29                      \n"
-        "push  r30                      \n"
-        "push  r31                      \n"
-
-        // ----------------------------------------------------------------
-        // 2. Save current SP into g_current->sp.
-        //    Read SP into r28:r29 (Y register; callee-saved, so rcall won't
-        //    clobber it after we set it below).
-        //    Then call rtos_current_tcb_ptr() to get &g_current.
-        // ----------------------------------------------------------------
-        "in    r28, __SP_L__            \n"  // r28 = SPL (SP after all pushes)
-        "in    r29, __SP_H__            \n"  // r29 = SPH
-
-        "rcall rtos_current_tcb_ptr     \n"  // r25:r24 = &g_current
-        "movw  r30, r24                 \n"  // Z = &g_current
-        "ld    r26, Z+                  \n"  // r26 = g_current (low byte)
-        "ld    r27, Z                   \n"  // r27 = g_current (high byte)
-        // X = g_current (TCB *), TCB->sp at offset 0 (2 bytes).
-        "st    X+, r28                  \n"  // TCB->sp_low  = SPL
-        "st    X,  r29                  \n"  // TCB->sp_high = SPH
-
-        // ----------------------------------------------------------------
-        // 3. Advance the tick and update g_current.
-        // ----------------------------------------------------------------
-        "rcall rtos_tick_handler        \n"  // tick, unblock tasks, timers
-        "rcall rtos_context_switch      \n"  // pick next task, update g_current
-
-        // ----------------------------------------------------------------
-        // 4. Load new task's SP.
-        // ----------------------------------------------------------------
-        "rcall rtos_current_tcb_ptr     \n"  // r25:r24 = &g_current
-        "movw  r30, r24                 \n"  // Z = &g_current
-        "ld    r26, Z+                  \n"  // r26 = new g_current (low byte)
-        "ld    r27, Z                   \n"  // r27 = new g_current (high byte)
-        "ld    r28, X+                  \n"  // r28 = new sp_low
-        "ld    r29, X                   \n"  // r29 = new sp_high
-        // Write SPH first (required by datasheet when changing stack pointer).
-        "out   __SP_H__, r29            \n"
-        "out   __SP_L__, r28            \n"
-
-        // ----------------------------------------------------------------
-        // 5. Restore new task's context and return to it.
-        // ----------------------------------------------------------------
-        "pop   r31                      \n"
-        "pop   r30                      \n"
-        "pop   r29                      \n"
-        "pop   r28                      \n"
-        "pop   r27                      \n"
-        "pop   r26                      \n"
-        "pop   r25                      \n"
-        "pop   r24                      \n"
-        "pop   r23                      \n"
-        "pop   r22                      \n"
-        "pop   r21                      \n"
-        "pop   r20                      \n"
-        "pop   r19                      \n"
-        "pop   r18                      \n"
-        "pop   r17                      \n"
-        "pop   r16                      \n"
-        "pop   r15                      \n"
-        "pop   r14                      \n"
-        "pop   r13                      \n"
-        "pop   r12                      \n"
-        "pop   r11                      \n"
-        "pop   r10                      \n"
-        "pop   r9                       \n"
-        "pop   r8                       \n"
-        "pop   r7                       \n"
-        "pop   r6                       \n"
-        "pop   r5                       \n"
-        "pop   r4                       \n"
-        "pop   r3                       \n"
-        "pop   r2                       \n"
-        "pop   r1                       \n"
-        "pop   r0                       \n"  // r0 = saved SREG
-        "out   __SREG__, r0             \n"  // restore SREG
-        "pop   r0                       \n"  // restore actual r0
-        "reti                           \n"
+        AVR_SAVE_CONTEXT()
+        "rcall rtos_tick_handler        \n"
+        "rcall rtos_context_switch      \n"
+        AVR_RESTORE_CONTEXT()
         ::: "memory"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Timer1 COMPB ISR — software-triggered context switch (no tick).
+//
+// Armed by port_request_reschedule(); we disable OCIE1B before context-switch
+// so the same yield request only fires once. The next port_request_reschedule
+// call will rearm it.
+// ---------------------------------------------------------------------------
+ISR(TIMER1_COMPB_vect, ISR_NAKED)
+{
+    asm volatile (
+        AVR_SAVE_CONTEXT()
+        // Disable OCIE1B so this software-yield interrupt fires only once
+        // per port_request_reschedule() request.
+        "lds   r24, %[timsk]            \n"
+        "andi  r24, %[mask]             \n"
+        "sts   %[timsk], r24            \n"
+        "rcall rtos_context_switch      \n"
+        AVR_RESTORE_CONTEXT()
+        :: [timsk] "i" (_SFR_MEM_ADDR(TIMSK1)),
+           [mask]  "i" ((uint8_t)~(1 << OCIE1B))
+        : "memory"
     );
 }
