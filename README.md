@@ -1,11 +1,12 @@
 # rtos
 
-A small, portable, hobby-grade RTOS written in C.
+[![CI](https://github.com/mseminatore/rtos/actions/workflows/ci.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/ci.yml)
+
+A small, fast, portable, RTOS written in C.
 
 **Design goals:**
 - Preemptive, priority-based scheduling (round-robin within equal priorities)
-- Static memory allocation only — no `malloc`, no surprises
-- Clean `rtos_` prefixed snake_case API (`rtos_task_create`, `rtos_task_delay`, `rtos_semaphore_take`, …)
+- Static memory allocation only — no `malloc`, no kernel allocadtions or surprises
 - Easily portable — architecture-specific code isolated in `port/<arch>/`
 - Host-testable kernel logic (unit tests run on the development machine)
 - O(k) tick handler — only examines the *k* tasks expiring on the current tick, not all blocked tasks
@@ -22,11 +23,11 @@ rtos/
 ├── include/          # Public API headers
 │   ├── rtos.h        # Master include
 │   ├── rtos_config.h # Compile-time knobs
-│   ├── rtos_task.h
-│   ├── rtos_sem.h
-│   ├── rtos_mutex.h
-│   ├── rtos_queue.h
-│   ├── rtos_timer.h
+│   ├── rtos_task.h   # Task definitions
+│   ├── rtos_sem.h    # Semaphore definitions
+│   ├── rtos_mutex.h  # Mutex definitions
+│   ├── rtos_queue.h  # Message queue definitions
+│   ├── rtos_timer.h  # Software timer definitions
 │   └── rtos_trace.h  # Optional trace hook macros
 ├── src/              # Architecture-independent kernel
 │   ├── task.c        # Scheduler + task management
