@@ -275,6 +275,7 @@ void port_start_first_task(void)
 // port_cpu_idle and port_core_id are provided by the weak stubs in task.c.
 // AVR sleep requires SM bits pre-configured by the application; the weak
 // no-op default is safe here since the tick ISR always wakes the CPU.
+ISR(TIMER1_COMPA_vect, ISR_NAKED)
 {
     asm volatile (
         // ----------------------------------------------------------------

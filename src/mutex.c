@@ -92,6 +92,8 @@ int rtos_mutex_lock(rtos_handle_t handle, rtos_tick_t timeout_ticks)
 
     // Clean up: if still on wait_list we timed out; if notif_pending is set
     // a notification woke us rather than the mutex being released to us.
+    // Note: notif_pending is intentionally NOT cleared here. The pending flag
+    // passes through so a subsequent rtos_task_notify_wait() sees the signal.
     port_enter_critical();
     int on_list = list_remove(&mutex->wait_list, self);
     if (on_list) rtos_task_blocked_remove(self);

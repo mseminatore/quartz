@@ -966,8 +966,8 @@ static void test_task_inspection(void)
     TEST(inspect_tcb.base_priority == 1);
 #endif
 
-    // Reject idle-priority assignment
-    TEST(RTOS_ERR == rtos_task_set_priority(h, RTOS_MAX_PRIORITIES - 1));
+    // Reject out-of-range priority assignment (RTOS_MAX_PRIORITIES and above are invalid)
+    TEST(RTOS_ERR == rtos_task_set_priority(h, RTOS_MAX_PRIORITIES));
     TEST(rtos_task_get_priority(h) == 1);  // unchanged
 
     // NULL handle returns sentinel values

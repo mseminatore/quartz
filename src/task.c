@@ -20,6 +20,17 @@
 #define STACK_SENTINEL_COUNT  4               // words filled at bottom of stack
 #define STACK_WATERMARK_WORD  0xA5A5A5A5u
 
+// Stack overflow detection and watermark require 32-bit word-aligned stack
+// buffers (uint32_t sentinel pattern). On 8-bit targets (AVR) stacks are byte
+// arrays; the uint32_t* cast would be UB and the stride would be wrong.
+// Automatically suppress both features when RTOS_STACK_BYTES_PER_WORD != 4.
+#if RTOS_STACK_BYTES_PER_WORD != 4
+#  undef  RTOS_STACK_OVERFLOW_CHECK
+#  define RTOS_STACK_OVERFLOW_CHECK  0
+#  undef  RTOS_STACK_WATERMARK
+#  define RTOS_STACK_WATERMARK       0
+#endif
+
 //[]---------------------------------------------------------------------------[]
 // Scheduler state — per-core when RTOS_NUM_CORES > 1
 //[]---------------------------------------------------------------------------[]
@@ -257,6 +268,10 @@ static rtos_handle_t task_create_impl(rtos_tcb_t *tcb,
     tcb->stack_words = stack_words;
 #endif
     tcb->next        = NULL;
+
+#if RTOS_ENABLE_TASK_NOTIFY
+    tcb->notif_pending = 0;
+#endif
 
 #if RTOS_NUM_CORES > 1
     tcb->core        = core;
@@ -648,7 +663,11 @@ size_t rtos_task_get_runtime_stats(rtos_runtime_stat_t *buf, size_t n)
 #if RTOS_STACK_OVERFLOW_CHECK
 static void idle_check_all_stacks(void)
 {
-    for (size_t i = 0; i < g_all_tasks_count; i++) {
+    port_enter_critical();
+    size_t count = g_all_tasks_count;
+    port_exit_critical();
+
+    for (size_t i = 0; i < count; i++) {
         uint32_t *p = (uint32_t *)g_all_tasks[i]->stack_base;
         if (p[0] != STACK_SENTINEL_WORD)
             rtos_stack_overflow_hook(g_all_tasks[i]);
@@ -690,12 +709,14 @@ static void idle_task(void *arg)
 //---------------------------------------------------------------------------
 rtos_tick_t rtos_idle_next_wakeup_ticks(void)
 {
+    port_enter_critical();
     rtos_tick_t now = G_TICK_COUNT;
     rtos_tick_t task_ticks = RTOS_WAIT_FOREVER;
     if (G_BLOCKED) {
         int32_t diff = (int32_t)(G_BLOCKED->wakeup_tick - now);
         task_ticks = diff > 0 ? (rtos_tick_t)diff : 0;
     }
+    port_exit_critical();
 
 #if RTOS_ENABLE_SOFTWARE_TIMERS
     extern rtos_tick_t rtos_timer_min_remaining(void);
@@ -911,22 +932,33 @@ uint8_t rtos_task_get_priority(rtos_handle_t task)
 //---------------------------------------------------------------------------
 int rtos_task_set_priority(rtos_handle_t task, uint8_t new_priority)
 {
-    if (new_priority >= (uint8_t)(RTOS_MAX_PRIORITIES - 1)) return RTOS_ERR;
+    if (new_priority >= (uint8_t)RTOS_MAX_PRIORITIES) return RTOS_ERR;
 
     rtos_tcb_t *tcb = task ? (rtos_tcb_t *)task : G_CURRENT;
     if (!tcb) return RTOS_ERR;
 
     port_enter_critical();
 
+#if RTOS_ENABLE_PRIORITY_INHERITANCE
+    // Only update base_priority (the task's "natural" priority).
+    // If the task is PI-boosted (effective priority < base_priority numerically,
+    // meaning higher priority), don't lower the effective priority below the
+    // current boost level when the user sets a new base.
+    int boosted   = (tcb->priority < tcb->base_priority);
+    uint8_t effective = (boosted && new_priority > tcb->priority) ? tcb->priority : new_priority;
+#else
+    uint8_t effective = new_priority;
+#endif
+
     if (tcb->state == TASK_READY || tcb->state == TASK_RUNNING) {
         ready_remove(tcb);
-        tcb->priority      = new_priority;
+        tcb->priority      = effective;
 #if RTOS_ENABLE_PRIORITY_INHERITANCE
         tcb->base_priority = new_priority;
 #endif
         ready_add(tcb);
     } else {
-        tcb->priority      = new_priority;
+        tcb->priority      = effective;
 #if RTOS_ENABLE_PRIORITY_INHERITANCE
         tcb->base_priority = new_priority;
 #endif

@@ -94,6 +94,8 @@ int rtos_queue_send(rtos_handle_t handle, const void *item, rtos_tick_t timeout_
 #if RTOS_ENABLE_TASK_NOTIFY
     } else if (self->notif_pending) {
         // Notification woke us, not the queue — treat as timeout.
+        // notif_pending is intentionally NOT cleared: it passes through to
+        // a subsequent rtos_task_notify_wait() call.
         on_list = 1;
 #endif
     } else if (q->count < q->capacity) {
@@ -167,6 +169,8 @@ int rtos_queue_receive(rtos_handle_t handle, void *item, rtos_tick_t timeout_tic
 #if RTOS_ENABLE_TASK_NOTIFY
     } else if (self->notif_pending) {
         // Notification woke us, not the queue — treat as timeout.
+        // notif_pending is intentionally NOT cleared: it passes through to
+        // a subsequent rtos_task_notify_wait() call.
         on_list = 1;
 #endif
     } else if (q->count > 0) {

@@ -190,9 +190,14 @@ int rtos_timer_is_active(rtos_handle_t handle)
 //---------------------------------------------------------------------------
 rtos_tick_t rtos_timer_min_remaining(void)
 {
-    if (!g_timer_list) return RTOS_WAIT_FOREVER;
+    port_enter_critical();
+    if (!g_timer_list) {
+        port_exit_critical();
+        return RTOS_WAIT_FOREVER;
+    }
     rtos_tick_t now  = rtos_task_tick_count();
     int32_t     diff = (int32_t)(g_timer_list->abs_expiry_tick - now);
+    port_exit_critical();
     return diff > 0 ? (rtos_tick_t)diff : 0;
 }
 

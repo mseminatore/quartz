@@ -95,6 +95,8 @@ int rtos_semaphore_take(rtos_handle_t handle, rtos_tick_t timeout_ticks)
     // by the tick handler. Clean up the list we're still on.
     // If a notification woke us, we were removed from wait_list by
     // rtos_task_notify — detect this via notif_pending and treat as timeout.
+    // Note: notif_pending is intentionally NOT cleared here. The pending flag
+    // passes through so a subsequent rtos_task_notify_wait() sees the signal.
     port_enter_critical();
     int on_list = list_remove(&sem->wait_list, self);
     if (on_list) rtos_task_blocked_remove(self);
