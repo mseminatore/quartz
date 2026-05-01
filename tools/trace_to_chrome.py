@@ -141,9 +141,11 @@ def emit_chrome(names, records):
         if t == EV_TASK_SWITCH_IN:
             # Close any prior open slice (defensive — paired SWITCH_OUT is
             # the normal case but ports may emit back-to-back SWITCH_INs).
+            # NOTE: the E event's `name` MUST match its B's name — chrome://
+            # tracing is lenient but Perfetto strictly matches B/E by name.
             if current is not None:
                 events.append({"ph": "E", "pid": pid, "tid": current_tid,
-                               "ts": r["ts"], "name": current})
+                               "ts": r["ts"], "name": "running"})
             current = hname(r["hid"])
             current_tid = tid_for_task(current)
             events.append({"ph": "B", "pid": pid, "tid": current_tid,
@@ -152,7 +154,7 @@ def emit_chrome(names, records):
         elif t == EV_TASK_SWITCH_OUT:
             if current is not None:
                 events.append({"ph": "E", "pid": pid, "tid": current_tid,
-                               "ts": r["ts"], "name": current})
+                               "ts": r["ts"], "name": "running"})
                 current = None
                 current_tid = None
         else:

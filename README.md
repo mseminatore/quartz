@@ -458,7 +458,7 @@ iterations, then prints the trace ring buffer over USB CDC framed by
 > calls in `CMakeLists.txt` for `sample_pico_trace_demo`. The default uses
 > the Pico's USB CDC because it works whether or not a probe is attached.
 
-Knobs (set via `-D` at configure time, or in `rtos_config.h`):
+settings (set via `-D` at configure time, or in `rtos_config.h`):
 
 | Macro                        | Default | Purpose                                          |
 |------------------------------|---------|--------------------------------------------------|
