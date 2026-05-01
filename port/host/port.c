@@ -144,6 +144,18 @@ void port_request_reschedule(void)
 void port_init(uint32_t tick_rate_hz) { (void)tick_rate_hz; }
 
 // ---------------------------------------------------------------------------
+// Monotonic 32-bit microsecond timestamp using CLOCK_MONOTONIC.
+// ---------------------------------------------------------------------------
+#include <time.h>
+
+uint32_t port_timestamp_us(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint32_t)((uint64_t)ts.tv_sec * 1000000ull + (uint64_t)ts.tv_nsec / 1000ull);
+}
+
+// ---------------------------------------------------------------------------
 // Hand execution to the first task; never returns
 // ---------------------------------------------------------------------------
 

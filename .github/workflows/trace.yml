@@ -1,0 +1,52 @@
+name: trace
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Configure (chrome trace backend)
+        run: cmake -B build -DRTOS_TRACE_BACKEND=chrome
+
+      - name: Build trace_demo
+        run: cmake --build build --parallel --target sample_trace_demo
+
+      - name: Build & run unit tests (covers trace_chrome ring buffer)
+        run: |
+          cmake --build build --parallel --target rtos_test
+          ctest --test-dir build --output-on-failure -R rtos_test
+
+      - name: Capture demo output
+        run: ./build/sample_trace_demo > capture.hex
+
+      - name: Decode capture and validate JSON
+        run: |
+          python3 tools/trace_to_chrome.py capture.hex --hex -o trace.json
+          python3 - <<'PY'
+          import json, sys
+          js = json.load(open('trace.json'))
+          evs = js['traceEvents']
+          assert len(evs) > 10, f"too few trace events: {len(evs)}"
+          types = {e['ph'] for e in evs}
+          assert 'B' in types and 'E' in types, f"missing slice events: {types}"
+          assert any(e['ph'] == 'i' for e in evs), "no instant events"
+          print(f"OK: {len(evs)} chrome events from capture")
+          PY
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trace-capture
+          path: |
+            capture.hex
+            trace.json

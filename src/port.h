@@ -33,6 +33,13 @@ void port_request_reschedule(void);
 // This function never returns.
 void port_start_first_task(void);
 
+// Monotonic 32-bit microsecond timestamp.  Used by the trace recorder; may
+// be called from any context (task, ISR).  Resolution and accuracy depend
+// on the port's hardware: DWT CYCCNT on M3+, hardware µs counter on RP2040,
+// CLOCK_MONOTONIC on host, tick-resolution interpolation elsewhere.
+// Wraps every ~71 minutes — adequate for short captures.
+uint32_t port_timestamp_us(void);
+
 // Idle power hint: put the CPU into a low-power sleep state until the next
 // interrupt arrives (WFI / sleep_cpu / equivalent).  Returns immediately on
 // single-threaded simulation targets.  Must not disable the tick interrupt.

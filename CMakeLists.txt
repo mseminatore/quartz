@@ -142,6 +142,20 @@ set(RTOS_KERNEL_SOURCES
     src/timer.c
 )
 
+# ---------------------------------------------------------------------------
+# Optional tracing backend selection
+#   -DRTOS_TRACE_BACKEND=none      (default, no overhead)
+#   -DRTOS_TRACE_BACKEND=chrome    (ring buffer → Chrome Trace Event JSON)
+#   -DRTOS_TRACE_BACKEND=sysview   (reserved for SEGGER SystemView; not yet)
+# ---------------------------------------------------------------------------
+set(RTOS_TRACE_BACKEND "none" CACHE STRING
+    "Tracing backend: none | chrome | sysview")
+set_property(CACHE RTOS_TRACE_BACKEND PROPERTY STRINGS none chrome sysview)
+
+if(RTOS_TRACE_BACKEND STREQUAL "chrome")
+    list(APPEND RTOS_KERNEL_SOURCES src/trace_chrome.c)
+endif()
+
 if(RTOS_TARGET_CM0PLUS)
     set(RTOS_PORT_SOURCES
         port/arm_cm0plus/port.c
@@ -219,11 +233,20 @@ foreach(_def
         RTOS_ENABLE_TRACE
         RTOS_ENABLE_RUNTIME_STATS
         RTOS_TICKLESS_IDLE
-        RTOS_NUM_CORES)
+        RTOS_NUM_CORES
+        RTOS_TRACE_BUFFER_BYTES)
     if(DEFINED ${_def})
         target_compile_definitions(rtos PUBLIC ${_def}=${${_def}})
     endif()
 endforeach()
+
+# Activate the chosen trace backend (also turns on RTOS_ENABLE_TRACE so that
+# the rtos_trace_* hook macros in rtos_trace.h expand to real calls).
+if(RTOS_TRACE_BACKEND STREQUAL "chrome")
+    target_compile_definitions(rtos PUBLIC
+        RTOS_ENABLE_TRACE=1
+        RTOS_TRACE_BACKEND_CHROME=1)
+endif()
 
 # For AVR, recommend reducing config values in your application's rtos_config.h:
 #   RTOS_MAX_TASKS          4   (2 KB SRAM is tight)
@@ -266,6 +289,25 @@ if(NOT RTOS_TARGET_PICO AND NOT RTOS_TARGET_CM0PLUS AND NOT RTOS_TARGET_AVR AND 
             target_link_libraries(sample_${sample} m)  # sinf for host stub
         endif()
     endforeach()
+
+    # ---------------------------------------------------------------------------
+    # trace_demo — only built when the chrome trace backend is selected.
+    # ---------------------------------------------------------------------------
+    if(RTOS_TRACE_BACKEND STREQUAL "chrome")
+        add_executable(sample_trace_demo
+                       samples/trace_demo.c
+                       ${RTOS_KERNEL_SOURCES}
+                       port/host/port.c)
+        target_include_directories(sample_trace_demo PRIVATE include src)
+        target_compile_definitions(sample_trace_demo PRIVATE
+            RTOS_ENABLE_TRACE=1
+            RTOS_TRACE_BACKEND_CHROME=1)
+        if(MSVC)
+            target_compile_options(sample_trace_demo PRIVATE /W3)
+        else()
+            target_compile_options(sample_trace_demo PRIVATE -fno-builtin)
+        endif()
+    endif()
 endif()
 
 # ---------------------------------------------------------------------------

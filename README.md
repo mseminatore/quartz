@@ -6,6 +6,7 @@
 | ARM Cortex-M | [![cm0plus](https://github.com/mseminatore/rtos/actions/workflows/cm0plus.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm0plus.yml) [![cm3](https://github.com/mseminatore/rtos/actions/workflows/cm3.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm3.yml) [![cm4](https://github.com/mseminatore/rtos/actions/workflows/cm4.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm4.yml) [![cm4-fpu](https://github.com/mseminatore/rtos/actions/workflows/cm4-fpu.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm4-fpu.yml) [![cm7](https://github.com/mseminatore/rtos/actions/workflows/cm7.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm7.yml) |
 | AVR          | [![avr](https://github.com/mseminatore/rtos/actions/workflows/avr.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/avr.yml) |
 | RISC-V       | [![riscv](https://github.com/mseminatore/rtos/actions/workflows/riscv.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/riscv.yml) |
+| Tracing      | [![trace](https://github.com/mseminatore/rtos/actions/workflows/trace.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/trace.yml) |
 
 A small, fast, portable, RTOS written in C.
 
@@ -329,6 +330,99 @@ for (size_t i = 0; i < n; i++)
     printf("%-16s  %6lu ticks  %3u%%\n",
            stats[i].name, (unsigned long)stats[i].runtime_ticks, stats[i].percent);
 ```
+
+---
+
+## Tracing & visualization
+
+The kernel ships with a built-in trace recorder that captures every scheduler
+event (task switch in/out, create/delete) plus IPC events (sem take/give,
+mutex lock/unlock, queue send/receive, timer fire) into a static ring buffer.
+The capture can be exported to **Chrome Trace Event Format** and opened in
+[`chrome://tracing`](chrome://tracing) or [Perfetto](https://ui.perfetto.dev)
+for a SystemView-style visual timeline.
+
+Enable the recorder by selecting the chrome backend at configure time.
+
+> **Platform note** — `sample_trace_demo` runs on the host POSIX simulator
+> (`port/host/port.c`), which uses `<ucontext.h>`. That header is **not
+> available with native MSVC**, so the demo only builds on Linux, macOS,
+> or Windows Subsystem for Linux (WSL). The kernel itself, the unit tests
+> (`rtos_test`), and every cross-compile target build fine on native
+> Windows — only the host samples are POSIX-only.
+
+### Linux / macOS
+
+```sh
+cmake -B build -DRTOS_TRACE_BACKEND=chrome
+cmake --build build --target sample_trace_demo
+./build/sample_trace_demo > capture.hex
+python3 tools/trace_to_chrome.py capture.hex --hex -o trace.json
+# Then open trace.json in chrome://tracing or https://ui.perfetto.dev
+```
+
+### Windows (via WSL)
+
+From a PowerShell or `cmd` prompt at the repo root:
+
+```powershell
+wsl -e bash -lc "cd /mnt/c/dev/rtos && cmake -B build_wsl_trace -DRTOS_TRACE_BACKEND=chrome"
+wsl -e bash -lc "cd /mnt/c/dev/rtos && cmake --build build_wsl_trace --target sample_trace_demo"
+wsl -e bash -lc "cd /mnt/c/dev/rtos && ./build_wsl_trace/sample_trace_demo > capture.hex"
+wsl -e bash -lc "cd /mnt/c/dev/rtos && python3 tools/trace_to_chrome.py capture.hex --hex -o trace.json"
+```
+
+Then open `trace.json` (which now lives in your repo on the Windows side)
+in `chrome://tracing` or [Perfetto UI](https://ui.perfetto.dev).
+
+> Use a **separate build directory** (e.g. `build_wsl_trace/`) for the WSL
+> build so it doesn't collide with your native MSVC `build/` directory.
+
+### How to read the visualization
+
+Each row in the timeline is one RTOS task (plus an `events` row for IPC
+calls that fire before the scheduler starts):
+
+| Lane         | What it shows                                                       |
+|--------------|---------------------------------------------------------------------|
+| `producer`, `consumer`, `idle`, … | One row per task (the `name` you passed to `rtos_task_create`). A coloured bar named **`running`** spans every interval that this task was on-CPU. Click a bar to see its priority. |
+| `events`     | Holds any IPC instant that occurred before the first task switch (rare).      |
+
+Vertical tick marks **on a task's row** are IPC instants (`sem_take`,
+`sem_give`, `mutex_lock`, `mutex_unlock`, `queue_send`, `queue_recv`,
+`timer_fire`) attributed to whichever task was running when the call
+happened. Click a tick to see the handle name and aux args.
+
+Reading the layout:
+
+- **Gaps** in a task's row = the task was blocked or pre-empted.
+- A bar in `idle` = no other task was ready (the system is idle).
+- A bar appearing in one task immediately followed by another = a context
+  switch; the timestamps are exact (microsecond resolution).
+- Use **W**/**S** in `chrome://tracing` to zoom, **A**/**D** to pan.
+
+Knobs (set via `-D` at configure time, or in `rtos_config.h`):
+
+| Macro                        | Default | Purpose                                          |
+|------------------------------|---------|--------------------------------------------------|
+| `RTOS_TRACE_BACKEND`         | `none`  | `none` / `chrome` / `sysview` (Phase 3 reserved) |
+| `RTOS_TRACE_BUFFER_BYTES`    | 4096    | Ring buffer size — 16 bytes per event            |
+| `RTOS_TRACE_HANDLE_TABLE_SIZE` | 32    | Distinct named objects (tasks + sem + mutex + queue) |
+
+Each event is a fixed 16-byte record (`include/rtos_trace_chrome.h`); the
+recorder adds **a few hundred cycles** of overhead per event on Cortex-M4
+when the backend is enabled.  Application code drains the buffer with
+`rtos_trace_chrome_dump_hex()` (e.g. over UART) or `rtos_trace_chrome_serialize()`
+(for binary transports such as RTT or USB).
+
+Every port implements `port_timestamp_us()`, which returns a monotonic
+microsecond counter using the best source available on that target
+(DWT.CYCCNT on Cortex-M3/M4/M7, CLINT MTIME on RISC-V, CLOCK_MONOTONIC on
+host, SysTick + tick interpolation on Cortex-M0+, Timer1 sub-tick on AVR,
+TIMG0 1 MHz counter on ESP32-S3).
+
+A future `RTOS_TRACE_BACKEND=sysview` option will write SEGGER SystemView
+records over RTT for live streaming into the SystemView desktop app.
 
 ---
 

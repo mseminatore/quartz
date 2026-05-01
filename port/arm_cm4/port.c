@@ -212,6 +212,23 @@ void port_init(uint32_t tick_rate_hz)
 
     // Set SVCall to a low priority so it can be called from Thread mode.
     SHPR2 |= (0xFFu << 24);
+
+    // Enable DWT CYCCNT for high-resolution timestamps used by the trace
+    // recorder.  Available on all ARMv7-M cores (Cortex-M3/M4/M7).
+    #define DEMCR       (*((volatile uint32_t *)0xE000EDFCu))
+    #define DWT_CTRL    (*((volatile uint32_t *)0xE0001000u))
+    #define DWT_CYCCNT  (*((volatile uint32_t *)0xE0001004u))
+    DEMCR    |= (1u << 24);   // TRCENA
+    DWT_CYCCNT = 0u;
+    DWT_CTRL |= 1u;           // CYCCNTENA
+}
+
+// Cycles per microsecond for DWT-based timestamps.
+#define RTOS_CYCLES_PER_US  (RTOS_CPU_HZ / 1000000u)
+
+uint32_t port_timestamp_us(void)
+{
+    return DWT_CYCCNT / RTOS_CYCLES_PER_US;
 }
 
 // ---------------------------------------------------------------------------

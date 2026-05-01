@@ -186,6 +186,28 @@ void port_init(uint32_t tick_rate_hz)
 }
 
 // ---------------------------------------------------------------------------
+// Monotonic 32-bit microsecond timestamp.
+// CM0+ has no DWT, so we combine the kernel tick count with the SysTick
+// down-counter for sub-tick resolution.
+// ---------------------------------------------------------------------------
+#include "../../include/rtos_task.h"
+
+uint32_t port_timestamp_us(void)
+{
+    uint32_t ticks, cvr1, cvr2;
+    // Read tick + CVR atomically: re-read tick if SysTick wrapped during read.
+    do {
+        ticks = (uint32_t)rtos_task_tick_count();
+        cvr1  = SYST_CVR;
+        cvr2  = SYST_CVR;
+    } while (cvr2 > cvr1);  // wrap detected, retry
+    uint32_t rvr = SYST_RVR;
+    uint32_t us_per_tick = 1000000u / RTOS_TICK_RATE_HZ;
+    uint32_t sub = (rvr ? ((rvr - cvr2) * us_per_tick) / (rvr + 1u) : 0u);
+    return ticks * us_per_tick + sub;
+}
+
+// ---------------------------------------------------------------------------
 // SVC_Handler — raised by port_start_first_task to enter exception context.
 // From inside an exception we can legally use EXC_RETURN (0xFFFFFFFD) to
 // switch Thread mode to the PSP and restore the first task's context.

@@ -217,6 +217,27 @@ void port_init(uint32_t tick_rate_hz)
     // (which restores EPS1 = 0, setting INTLEVEL=0 and enabling interrupts).
 }
 
+// ---------------------------------------------------------------------------
+// Monotonic 32-bit microsecond timestamp.  TIMG0_T0 counts at 1 MHz and
+// auto-reloads to 0 every tick (1 ms), so we combine kernel tick count
+// with the latched timer value to get a continuous µs counter.
+// ---------------------------------------------------------------------------
+#include "../../include/rtos_task.h"
+
+uint32_t port_timestamp_us(void)
+{
+    uint32_t ticks, lo1, lo2;
+    do {
+        ticks = (uint32_t)rtos_task_tick_count();
+        TIMG_T0UPDATE = 1;
+        lo1 = TIMG_T0LO;
+        TIMG_T0UPDATE = 1;
+        lo2 = TIMG_T0LO;
+    } while (lo2 < lo1);  // timer wrapped between reads → retry
+    uint32_t us_per_tick = 1000000u / RTOS_TICK_RATE_HZ;
+    return ticks * us_per_tick + lo2;
+}
+
 // port_start_first_task is implemented in port_asm.S.
 
 // ---------------------------------------------------------------------------

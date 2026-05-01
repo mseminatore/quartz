@@ -21,6 +21,7 @@ void port_exit_critical(void)      { g_critical_depth--; }
 void port_request_reschedule(void) { /* no-op on host */ }
 void port_init(uint32_t hz)        { (void)hz; }
 void port_start_first_task(void)   { /* no-op on host */ }
+uint32_t port_timestamp_us(void)   { static uint32_t t; return ++t; }
 
 void *port_init_stack(void     *stack_top,
                       void    (*func)(void *),
@@ -40,6 +41,10 @@ void *port_init_stack(void     *stack_top,
 #include "../src/mutex.c"
 #include "../src/queue.c"
 #include "../src/timer.c"
+
+// Pull the chrome trace recorder into the test binary so we can unit-test
+// its ring buffer + serialization independently of the kernel build flags.
+#include "../src/trace_chrome.c"
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -2377,6 +2382,57 @@ static void test_task_handle_self(void)
 // Main
 // ---------------------------------------------------------------------------
 
+static void test_trace_chrome(void)
+{
+    SUITE("trace_chrome ring buffer");
+
+    rtos_trace_chrome_reset();
+    TEST(rtos_trace_chrome_count() == 0);
+    TEST(!rtos_trace_chrome_overflowed());
+
+    // Build a fake TCB with a name so task hooks register a name table entry.
+    rtos_tcb_t fake = {0};
+    for (const char *p = "trc"; *p; ++p) fake.name[p - "trc"] = *p;
+    fake.priority = 5;
+
+    rtos_trace_task_create(&fake);
+    rtos_trace_task_switched_in(&fake);
+    rtos_trace_sem_take((void *)0x1000);
+    rtos_trace_sem_give((void *)0x1000);
+    rtos_trace_mutex_lock((void *)0x2000);
+    rtos_trace_mutex_unlock((void *)0x2000);
+    rtos_trace_queue_send((void *)0x3000);
+    rtos_trace_queue_receive((void *)0x3000);
+    rtos_trace_timer_fire((void *)0x4000);
+    rtos_trace_task_switched_out(&fake);
+
+    TEST(rtos_trace_chrome_count() == 10);
+    TEST(!rtos_trace_chrome_overflowed());
+
+    static uint8_t buf[8192];
+    size_t n = rtos_trace_chrome_serialize(buf, sizeof(buf));
+    TEST(n > 16);
+    // Magic header
+    TEST(buf[0] == 'R' && buf[1] == 'T' && buf[2] == 'R' && buf[3] == 'C');
+    // Version = 1
+    TEST(buf[4] == 1 && buf[5] == 0);
+    // records_n = 10  (offset 12, little-endian u32)
+    TEST(buf[12] == 10 && buf[13] == 0 && buf[14] == 0 && buf[15] == 0);
+
+    // Capacity-too-small returns 0 without crashing
+    TEST(rtos_trace_chrome_serialize(buf, 4) == 0);
+
+    // Overflow detection: write more than capacity records
+    rtos_trace_chrome_reset();
+    for (size_t i = 0; i < (RTOS_TRACE_BUFFER_BYTES / 16) + 5; ++i) {
+        rtos_trace_sem_take((void *)0x100);
+    }
+    TEST(rtos_trace_chrome_overflowed());
+    TEST(rtos_trace_chrome_count() == (RTOS_TRACE_BUFFER_BYTES / 16));
+
+    rtos_trace_chrome_reset();
+}
+
 void test_main(int argc, char *argv[])
 {
     (void)argc; (void)argv;
@@ -2430,6 +2486,7 @@ void test_main(int argc, char *argv[])
     test_notify_value();
 #endif
     test_sem_take_from_isr();
+    test_trace_chrome();
 #if RTOS_ENABLE_TASK_DELETE
     test_task_delete();
     test_task_delete_while_blocked();

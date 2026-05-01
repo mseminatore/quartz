@@ -65,6 +65,13 @@ void port_reset_timer(void)
     CLINT_MTIMECMP = CLINT_MTIME + MTIME_TICKS_PER_TICK;
 }
 
+// Monotonic 32-bit microsecond timestamp from the CLINT MTIME counter.
+uint32_t port_timestamp_us(void)
+{
+    uint64_t mt = CLINT_MTIME;
+    return (uint32_t)(mt / ((uint64_t)RTOS_MTIME_HZ / 1000000ull));
+}
+
 void port_enter_critical(void)
 {
     __asm__ volatile("csrci mstatus, 0x8");

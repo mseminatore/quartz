@@ -120,6 +120,30 @@ void port_init(uint32_t tick_rate_hz)
 }
 
 // ---------------------------------------------------------------------------
+// Monotonic 32-bit microsecond timestamp — combines tick count with TCNT1
+// for sub-tick resolution.  Reads must be done with interrupts disabled
+// because TCNT1 is 16-bit and the tick ISR may fire mid-read.
+// ---------------------------------------------------------------------------
+#include "../../include/rtos_task.h"
+
+uint32_t port_timestamp_us(void)
+{
+    uint32_t ticks;
+    uint16_t cnt;
+    uint16_t top;
+    uint8_t  sreg = SREG;
+    cli();
+    ticks = (uint32_t)rtos_task_tick_count();
+    cnt   = TCNT1;
+    top   = OCR1A;
+    SREG  = sreg;
+
+    uint32_t us_per_tick = 1000000UL / RTOS_TICK_RATE_HZ;
+    uint32_t sub = top ? ((uint32_t)cnt * us_per_tick) / ((uint32_t)top + 1u) : 0u;
+    return ticks * us_per_tick + sub;
+}
+
+// ---------------------------------------------------------------------------
 // port_init_stack — build the initial AVR context frame on the task's stack.
 //
 // stack_top must point one byte past the end of the stack buffer.
