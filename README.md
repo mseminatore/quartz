@@ -640,7 +640,7 @@ int main(void)
 
 ### General samples (host + RP2040)
 
-Six demos in `samples/`. They build and run on the host (macOS / Linux) via
+Five demos in `samples/`. They build and run on the host (macOS / Linux) via
 the `port/host/` simulation port; on RP2040 the hardware stubs are replaced
 with real GPIO/UART/ADC calls via `#ifdef __rp2040__`.
 
@@ -692,3 +692,27 @@ cmake --build build_picow
 
 `wifi_http` requires `lwipopts.h` (provided in `samples/`) which configures
 lwIP for the Pico W background-IRQ integration.
+
+### Tracing samples (chrome backend)
+
+Two extra samples are built **only** when the configure flag
+`-DRTOS_TRACE_BACKEND=chrome` is set. They drive the kernel through enough
+events to fill the trace ring buffer, then dump it as ASCII hex for the
+`tools/trace_to_chrome.py` decoder. See [Tracing & visualization](#tracing--visualization)
+for the full build / capture / decode / view recipe.
+
+| Binary | Target | Concepts demonstrated |
+|---|---|---|
+| `sample_trace_demo` | host (POSIX — Linux / macOS / WSL; not native MSVC) | Producer + consumer exercising sem / mutex / queue / context-switch trace events; dumps to stdout |
+| `sample_pico_trace_demo` | RP2040 / Pico / Pico W | Same workload on real hardware; dumps over USB CDC framed by `---BEGIN-TRACE---` / `---END---` markers, captured via the Pi Debug Probe or BOOTSEL flash |
+
+```sh
+# Host (Linux / macOS / WSL)
+cmake -B build_trace -DRTOS_TRACE_BACKEND=chrome
+cmake --build build_trace --target sample_trace_demo
+
+# Pico / Pico W
+export PICO_SDK_PATH=~/pico-sdk
+cmake -B build_pico_trace -DPICO_BOARD=pico_w -DRTOS_TRACE_BACKEND=chrome
+cmake --build build_pico_trace --target sample_pico_trace_demo
+```
