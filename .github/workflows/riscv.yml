@@ -1,0 +1,30 @@
+name: riscv
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-riscv64-unknown-elf
+
+      - name: Configure
+        run: |
+          cmake -B build_riscv \
+                -DRTOS_PORT=riscv \
+                -DCMAKE_TOOLCHAIN_FILE=cmake/riscv32_clint.cmake
+
+      - name: Build rtos library
+        run: cmake --build build_riscv --target rtos --parallel
+
+      - name: Verify librtos.a
+        run: |
+          test -f build_riscv/librtos.a
+          ls -l build_riscv/librtos.a

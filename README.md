@@ -1,12 +1,17 @@
 # rtos
 
-[![CI](https://github.com/mseminatore/rtos/actions/workflows/ci.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/ci.yml)
+[![host-linux](https://github.com/mseminatore/rtos/actions/workflows/host-linux.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/host-linux.yml)
+[![host-windows](https://github.com/mseminatore/rtos/actions/workflows/host-windows.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/host-windows.yml)
+[![avr](https://github.com/mseminatore/rtos/actions/workflows/avr.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/avr.yml)
+[![cm4](https://github.com/mseminatore/rtos/actions/workflows/cm4.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm4.yml)
+[![cm4-fpu](https://github.com/mseminatore/rtos/actions/workflows/cm4-fpu.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm4-fpu.yml)
+[![riscv](https://github.com/mseminatore/rtos/actions/workflows/riscv.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/riscv.yml)
 
 A small, fast, portable, RTOS written in C.
 
 **Design goals:**
 - Preemptive, priority-based scheduling (round-robin within equal priorities)
-- Static memory allocation only — no `malloc`, no kernel allocadtions or surprises
+- Static memory allocation only — no `malloc`, no kernel allocations or surprises
 - Easily portable — architecture-specific code isolated in `port/<arch>/`
 - Host-testable kernel logic (unit tests run on the development machine)
 - O(k) tick handler — only examines the *k* tasks expiring on the current tick, not all blocked tasks

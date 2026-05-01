@@ -1,0 +1,21 @@
+name: host-windows
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build
+
+      - name: Build (rtos_test only)
+        run: cmake --build build --config Debug --target rtos_test --parallel
+
+      - name: Test
+        working-directory: build
+        run: ctest -C Debug --output-on-failure
