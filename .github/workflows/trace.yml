@@ -38,7 +38,7 @@ jobs:
           assert len(evs) > 10, f"too few trace events: {len(evs)}"
           types = {e['ph'] for e in evs}
           assert 'B' in types and 'E' in types, f"missing slice events: {types}"
-          assert any(e['ph'] == 'i' for e in evs), "no instant events"
+          assert any(e['ph'] == 'X' for e in evs), "no IPC bar events"
           print(f"OK: {len(evs)} chrome events from capture")
           PY
 
