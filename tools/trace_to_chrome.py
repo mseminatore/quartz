@@ -96,6 +96,27 @@ def parse(buf: bytes):
 # in chrome://tracing without dominating realistic kernel-scale time spans.
 IPC_BAR_US = 50
 
+# Minimum slot width assigned to members of a tight cluster after equalization.
+# Without this, a cluster spanning 1 µs (post-nudge) collapses to 1-µs bars
+# that are essentially invisible at default zoom.  Re-spacing cluster members
+# at this granularity keeps each bar clickable while only nudging timestamps
+# by up to IPC_MIN_VISIBLE_US * cluster_size µs (well below the µs→ms gap to
+# the next IPC iteration on real workloads).
+IPC_MIN_VISIBLE_US = 20
+
+# Per-event-type color names (Chrome Trace Format `cname` palette).  Both
+# chrome://tracing and Perfetto honor these — handy for telling apart
+# closely-spaced IPC events that would otherwise be visually indistinguishable.
+IPC_CNAME = {
+    EV_SEM_TAKE:      "good",            # green
+    EV_SEM_GIVE:      "olive",
+    EV_MUTEX_LOCK:    "bad",             # red
+    EV_MUTEX_UNLOCK:  "yellow",
+    EV_QUEUE_SEND:    "rail_response",   # lavender
+    EV_QUEUE_RECEIVE: "rail_animation",  # orange
+    EV_TIMER_FIRE:    "white",
+}
+
 # Per-event-type labels for the (aux1, aux2) record fields.  See trace_chrome.c
 # call sites for the kernel-side meaning.
 AUX_LABELS = {
@@ -198,11 +219,15 @@ def emit_chrome(names, records):
                 tid = EVENTS_TID
                 events_lane_used = True
             a1_lbl, a2_lbl = AUX_LABELS.get(t, ("aux1", "aux2"))
-            events.append({"ph": "X", "pid": pid, "tid": tid,
-                           "ts": r["ts"], "dur": IPC_BAR_US,
-                           "name": f"{label}({target})",
-                           "args": {"handle": target, "by_task": current,
-                                    a1_lbl: r["aux1"], a2_lbl: r["aux2"]}})
+            ev = {"ph": "X", "pid": pid, "tid": tid,
+                  "ts": r["ts"], "dur": IPC_BAR_US,
+                  "name": f"{label}({target})",
+                  "args": {"handle": target, "by_task": current,
+                           a1_lbl: r["aux1"], a2_lbl: r["aux2"]}}
+            cname = IPC_CNAME.get(t)
+            if cname is not None:
+                ev["cname"] = cname
+            events.append(ev)
 
     if events_lane_used:
         events.append({"name": "thread_name", "ph": "M", "pid": pid,
@@ -218,6 +243,11 @@ def emit_chrome(names, records):
     #      and add an inconsistent collapse arrow only on the affected lane).
     #   2. Clamp each bar's dur so it never overlaps the next bar on the same
     #      lane (target IPC_BAR_US, floor 1 µs).
+    #   3. Equalize widths within tight clusters: a cluster is a contiguous
+    #      run of events where each is within IPC_BAR_US of the next.  Within
+    #      a cluster, give every event the cluster's smallest dur — otherwise
+    #      the trailing event of a cluster (whose gap to the next iteration is
+    #      large) keeps the full 50 µs and visually dwarfs its peers.
     by_tid = {}
     for e in events:
         if e.get("ph") == "X":
@@ -232,6 +262,29 @@ def emit_chrome(names, records):
                 gap = tid_evs[i + 1]["ts"] - e["ts"]
                 if gap < e["dur"]:
                     e["dur"] = max(1, gap)
+        # Cluster equalization + re-spacing.  A cluster is a contiguous run of
+        # events where each is within IPC_BAR_US of the next.  Distribute the
+        # cluster across uniform slots wide enough to remain clickable.
+        i = 0
+        while i < len(tid_evs):
+            j = i
+            while (j + 1 < len(tid_evs)
+                   and (tid_evs[j + 1]["ts"] - tid_evs[j]["ts"]) <= IPC_BAR_US):
+                j += 1
+            n = j - i + 1
+            if n > 1:  # cluster of >= 2 events
+                first_ts = tid_evs[i]["ts"]
+                natural_span = tid_evs[j]["ts"] - first_ts
+                slot = max(IPC_MIN_VISIBLE_US, (natural_span + n - 1) // n)
+                # Don't run past the next standalone event (if any).
+                if j + 1 < len(tid_evs):
+                    available = tid_evs[j + 1]["ts"] - first_ts - 1
+                    if available > 0:
+                        slot = min(slot, max(1, available // n))
+                for k, e in enumerate(tid_evs[i:j + 1]):
+                    e["ts"] = first_ts + k * slot
+                    e["dur"] = max(1, slot - 1)
+            i = j + 1
 
     # Chrome Trace Event Format only accepts "ms" (default) or "ns" for
     # displayTimeUnit.  Our `ts` values are integer microseconds (the format's
