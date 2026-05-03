@@ -1,0 +1,3 @@
+[submodule "extern/testy"]
+	path = extern/testy
+	url = https://github.com/mseminatore/testy

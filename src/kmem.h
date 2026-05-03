@@ -11,11 +11,21 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// Simple byte-wise implementations of memcpy and memset. These are not 
+// optimized for performance, but they are small and portable. They are 
+// intended for use in the kernel, where we may not have access to a 
+// full C library, and where performance is not critical.
+
+//---------------------------------------------------------------------------
+// kernel memcpy and memset
+//---------------------------------------------------------------------------
 static inline void rtos_kmemcpy(void *dst, const void *src, size_t n)
 {
     unsigned char       *d = (unsigned char *)dst;
     const unsigned char *s = (const unsigned char *)src;
-    while (n--) {
+
+    while (n--) 
+    {
         *d++ = *s++;
     }
 }
@@ -23,7 +33,9 @@ static inline void rtos_kmemcpy(void *dst, const void *src, size_t n)
 static inline void rtos_kmemset(void *dst, int c, size_t n)
 {
     unsigned char *d = (unsigned char *)dst;
-    while (n--) {
+
+    while (n--) 
+    {
         *d++ = (unsigned char)c;
     }
 }
