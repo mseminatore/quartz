@@ -42,9 +42,9 @@ rtos/
 │   ├── arm_cm3.cmake              # arm-none-eabi-gcc toolchain file (Cortex-M3)
 │   ├── arm_cm4.cmake              # arm-none-eabi-gcc toolchain file (Cortex-M4F)
 │   └── arm_cm7.cmake              # arm-none-eabi-gcc toolchain file (Cortex-M7, fpv5-sp-d16)
+├── extern/
+│   └── testy/        # Testy unit-test framework (git submodule)
 ├── test/
-│   ├── test.h        # Testy unit-test framework (vendored)
-│   ├── test_main.c   # Testy entry point
-│   └── test_rtos.c   # Host-side unit tests (44 suites, 318 assertions)
+│   └── test_rtos.c   # Host-side unit tests
 └── CMakeLists.txt
 ```
