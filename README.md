@@ -1,4 +1,6 @@
-# rtos
+# Quartz
+
+*A small, fast, portable, real-time operating system written in C.*
 
 | Family       | CI status |
 |--------------|-----------|
@@ -7,8 +9,6 @@
 | AVR          | [![avr](https://github.com/mseminatore/rtos/actions/workflows/avr.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/avr.yml) |
 | RISC-V       | [![riscv](https://github.com/mseminatore/rtos/actions/workflows/riscv.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/riscv.yml) |
 | Tracing      | [![trace](https://github.com/mseminatore/rtos/actions/workflows/trace.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/trace.yml) |
-
-A small, fast, portable, RTOS written in C.
 
 **Design goals:**
 - Preemptive, priority-based scheduling (round-robin within equal priorities)

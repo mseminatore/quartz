@@ -1,4 +1,4 @@
-# Repository layout
+# Quartz — repository layout
 
 ```
 rtos/
