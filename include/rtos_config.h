@@ -100,6 +100,15 @@
 
 #include <stdint.h>
 
+// Portable stack element type.  Declare task stacks as:
+//   static rtos_stack_t my_stack[N];
+// On 32-bit targets (ARM, RISC-V, Xtensa) this is uint32_t; on AVR it is uint8_t.
+#if RTOS_STACK_BYTES_PER_WORD == 4
+    typedef uint32_t rtos_stack_t;
+#else
+    typedef uint8_t  rtos_stack_t;
+#endif
+
 #if RTOS_TICK_TYPE_16BIT
     typedef uint16_t rtos_tick_t;
 #   define RTOS_TICK_MAX        ((rtos_tick_t)0xFFFFU)

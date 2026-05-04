@@ -16,15 +16,31 @@ While programming small projects to bare metal is usually adequate, there are
 times when the the support of a minimal operating system would be useful. For
 example, when multiple tasks and/or multiple cores are needed.
 
-I evaluated FreeRTOS and Zephyr. Both are highly capable, well supported and 
-mature. Still, both seemed like more than I needed. Having previously written 
-written a small multi-tasking kernel in assembly language as part of the 
+I started by evaluating FreeRTOS and Zephyr. Both are highly capable, well 
+supported and mature. Still, they both seemed like more than I needed. 
+Having previously written a multi-tasking kernel in assembly language as part of the 
 [bintools](https://github.com/mseminatore/bintools) project I decided to create
 my own.
 
-I'll add new ports as I need them. The most likely next candidate is the RP2350 
-(ARM Cortex-M33) for the RPi PICO 2. If there is a processor you'd like to be 
-suppported, please consider contributing.
+New ports may be added as needed. The most likely next candidate is the RP2350 
+(ARM Cortex-M33) for the Raspberry Pi PICO 2. If there is a processor you'd like
+supported, let us know, and please consider contributing.
+
+**Design goals:**
+- Preemptive, priority-based scheduling (round-robin within equal priorities)
+- Static memory allocation only — no `malloc`, no kernel allocations or surprises
+- Easily portable — architecture-specific code isolated in `port/<arch>/`
+- Host-testable kernel logic (unit tests run on the development machine)
+- O(k) tick handler — only examines the *k* tasks expiring on the current tick, not all blocked tasks
+- Priority-inheritance mutex — prevents unbounded priority inversion (single-level boost)
+
+**Currently supported targets:** 
+
+- RP2040 (ARM Cortex-M0+)
+- ARM Cortex-M4F (generic bare-metal, e.g. STM32F4xx)
+- AVR ATmega328P (Arduino Uno/Nano)
+- RISC-V RV32IMAC (QEMU virt / SiFive FE310)
+- ESP32-S3 (Xtensa LX7, Espressif QEMU)
 
 ## Build Status
 
@@ -35,16 +51,6 @@ suppported, please consider contributing.
 | AVR          | [![avr](https://github.com/mseminatore/quartz/actions/workflows/avr.yml/badge.svg)](https://github.com/mseminatore/quartz/actions/workflows/avr.yml) |
 | RISC-V       | [![riscv](https://github.com/mseminatore/quartz/actions/workflows/riscv.yml/badge.svg)](https://github.com/mseminatore/quartz/actions/workflows/riscv.yml) |
 | Tracing      | [![trace](https://github.com/mseminatore/quartz/actions/workflows/trace.yml/badge.svg)](https://github.com/mseminatore/quartz/actions/workflows/trace.yml) |
-
-**Design goals:**
-- Preemptive, priority-based scheduling (round-robin within equal priorities)
-- Static memory allocation only — no `malloc`, no kernel allocations or surprises
-- Easily portable — architecture-specific code isolated in `port/<arch>/`
-- Host-testable kernel logic (unit tests run on the development machine)
-- O(k) tick handler — only examines the *k* tasks expiring on the current tick, not all blocked tasks
-- Priority-inheritance mutex — prevents unbounded priority inversion (single-level boost)
-
-**Supported targets:** RP2040 (ARM Cortex-M0+), ARM Cortex-M4F (generic bare-metal, e.g. STM32F4xx), AVR ATmega328P (Arduino Uno/Nano), RISC-V RV32IMAC (QEMU virt / SiFive FE310), ESP32-S3 (Xtensa LX7, Espressif QEMU)
 
 ---
 
@@ -103,7 +109,7 @@ cmake --build build
 ```
 
 The test suite uses the [testy](https://github.com/mseminatore/testy) micro-framework
-(vendored in `test/test.h`).  It builds on GCC, Clang, and MSVC without extra
+(git submodule in `extern/testy`).  It builds on GCC, Clang, and MSVC without extra
 dependencies.
 
 ### Selecting a port
@@ -134,17 +140,19 @@ See [PORTS.md](PORTS.md) for more details.
 
 ---
 
+## Quartz API
+
 ### Kernel
 ```c
-void     rtos_start(void);              // start scheduler — never returns
+void     rtos_start(void);              // start scheduler — never returns!
 uint32_t rtos_task_tick_count(void);
 ```
 
 ### Tasks
 ```c
 // All storage (TCB + stack) must be static/global — provided by the caller.
-static rtos_tcb_t my_tcb;
-static uint32_t   my_stack[256];
+static rtos_tcb_t   my_tcb;
+static rtos_stack_t my_stack[256];
 
 rtos_handle_t h = rtos_task_create(&my_tcb, my_stack, 256,
                                    my_task_func, NULL, "myTask", 3);
@@ -594,7 +602,7 @@ and starts its scheduler — no user-written entry wrapper is needed.
 #include "pico/multicore.h"   // Raspberry Pi Pico SDK
 
 static rtos_tcb_t   c0_tcb, c1_tcb;
-static uint32_t     c0_stack[256], c1_stack[256];
+static rtos_stack_t c0_stack[256], c1_stack[256];
 static rtos_queue_t shared_queue;
 static uint8_t      shared_buf[4 * sizeof(uint32_t)];
 rtos_handle_t       g_queue;
@@ -653,7 +661,7 @@ int main(void)
 #include "rtos.h"
 
 static rtos_tcb_t task1_tcb, task2_tcb;
-static uint32_t   task1_stack[256], task2_stack[256];
+static rtos_stack_t task1_stack[256], task2_stack[256];
 static rtos_sem_t ready_sem;
 
 static void task1(void *arg)

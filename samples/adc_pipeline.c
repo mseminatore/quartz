@@ -110,7 +110,7 @@ static rtos_handle_t g_queue_handle;
 // ---------------------------------------------------------------------------
 
 static rtos_tcb_t g_sampler_tcb;
-static uint32_t   g_sampler_stack[256];
+static rtos_stack_t   g_sampler_stack[256];
 
 static void sampler_task(void *arg)
 {
@@ -130,7 +130,7 @@ static void sampler_task(void *arg)
 // ---------------------------------------------------------------------------
 
 static rtos_tcb_t g_monitor_tcb;
-static uint32_t   g_monitor_stack[256];
+static rtos_stack_t   g_monitor_stack[256];
 
 static void monitor_task(void *arg)
 {

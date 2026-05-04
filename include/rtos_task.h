@@ -63,26 +63,27 @@ typedef struct rtos_tcb {
 } rtos_tcb_t;
 
 // Create a task on the calling core. tcb and stack must be static storage
-// provided by the caller. stack_words is the number of RTOS_STACK_BYTES_PER_WORD
-// units in the stack buffer.
-rtos_handle_t rtos_task_create(rtos_tcb_t *tcb,
-                                void       *stack,
-                                size_t      stack_words,
-                                void      (*func)(void *),
-                                void       *arg,
-                                const char *name,
-                                uint8_t     priority);
+// provided by the caller. Declare the stack as:
+//   static rtos_stack_t my_stack[N];
+// stack_words is the number of elements (each RTOS_STACK_BYTES_PER_WORD bytes).
+rtos_handle_t rtos_task_create(rtos_tcb_t    *tcb,
+                                rtos_stack_t  *stack,
+                                size_t         stack_words,
+                                void         (*func)(void *),
+                                void          *arg,
+                                const char    *name,
+                                uint8_t        priority);
 
 // Create a task pinned to a specific CPU core. Only available when RTOS_NUM_CORES > 1.
 #if RTOS_NUM_CORES > 1
-rtos_handle_t rtos_task_create_on_core(rtos_tcb_t *tcb,
-                                        void       *stack,
-                                        size_t      stack_words,
-                                        void      (*func)(void *),
-                                        void       *arg,
-                                        const char *name,
-                                        uint8_t     priority,
-                                        uint8_t     core);
+rtos_handle_t rtos_task_create_on_core(rtos_tcb_t    *tcb,
+                                        rtos_stack_t  *stack,
+                                        size_t         stack_words,
+                                        void         (*func)(void *),
+                                        void          *arg,
+                                        const char    *name,
+                                        uint8_t        priority,
+                                        uint8_t        core);
 
 // Entry point for core 1. Pass to multicore_launch_core1() before calling
 // rtos_start() on core 0. Initialises core 1's SysTick and starts its scheduler.

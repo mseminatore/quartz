@@ -183,7 +183,7 @@ static int http_get(const ip_addr_t *server_ip)
 // ---------------------------------------------------------------------------
 
 static rtos_tcb_t g_wifi_tcb;
-static uint32_t   g_wifi_stack[512];
+static rtos_stack_t   g_wifi_stack[512];
 
 static void wifi_task(void *arg)
 {
@@ -224,7 +224,7 @@ static void wifi_task(void *arg)
 // ---------------------------------------------------------------------------
 
 static rtos_tcb_t g_http_tcb;
-static uint32_t   g_http_stack[1024];  // larger: lwIP raw API + printf
+static rtos_stack_t   g_http_stack[1024];  // larger: lwIP raw API + printf
 
 static void http_task(void *arg)
 {
@@ -275,7 +275,7 @@ static void http_task(void *arg)
 // ---------------------------------------------------------------------------
 
 static rtos_tcb_t g_led_tcb;
-static uint32_t   g_led_stack[256];
+static rtos_stack_t   g_led_stack[256];
 
 static void led_task(void *arg)
 {

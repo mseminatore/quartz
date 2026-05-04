@@ -27,8 +27,8 @@
 #define ITERATIONS  20
 
 static rtos_tcb_t      g_producer_tcb, g_consumer_tcb;
-static uint32_t        g_producer_stack[256];
-static uint32_t        g_consumer_stack[256];
+static rtos_stack_t        g_producer_stack[256];
+static rtos_stack_t        g_consumer_stack[256];
 
 static rtos_sem_t      g_sem;
 static rtos_handle_t   g_sem_h;

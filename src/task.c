@@ -46,7 +46,7 @@ rtos_tcb_t         *g_current[RTOS_NUM_CORES];
 static rtos_tick_t  g_tick_count[RTOS_NUM_CORES];
 
 static rtos_tcb_t   g_idle_tcb[RTOS_NUM_CORES];
-static uint8_t      g_idle_stack[RTOS_NUM_CORES][RTOS_IDLE_STACK_WORDS * RTOS_STACK_BYTES_PER_WORD];
+static rtos_stack_t  g_idle_stack[RTOS_NUM_CORES][RTOS_IDLE_STACK_WORDS];
 
 // Convenience macros — index by current core
 #define CORE            port_core_id()
@@ -66,7 +66,7 @@ rtos_tcb_t         *g_current;
 static rtos_tick_t  g_tick_count;
 
 static rtos_tcb_t   g_idle_tcb;
-static uint8_t      g_idle_stack[RTOS_IDLE_STACK_WORDS * RTOS_STACK_BYTES_PER_WORD];
+static rtos_stack_t  g_idle_stack[RTOS_IDLE_STACK_WORDS];
 
 #define G_READY         g_ready
 #define G_READY_BITMAP  g_ready_bitmap
@@ -272,14 +272,14 @@ static rtos_tcb_t *scheduler_pick_next(void)
 // Internal: create a task pinned to a specified core. Both public APIs call
 // this so the stack init, watermark, and ready_add logic live in one place.
 //---------------------------------------------------------------------------
-static rtos_handle_t task_create_impl(rtos_tcb_t *tcb,
-                                      void       *stack,
-                                      size_t      stack_words,
-                                      void      (*func)(void *),
-                                      void       *arg,
-                                      const char *name,
-                                      uint8_t     priority,
-                                      uint8_t     core)
+static rtos_handle_t task_create_impl(rtos_tcb_t   *tcb,
+                                      rtos_stack_t *stack,
+                                      size_t        stack_words,
+                                      void        (*func)(void *),
+                                      void         *arg,
+                                      const char   *name,
+                                      uint8_t       priority,
+                                      uint8_t       core)
 {
     if (!tcb || !stack || !func || priority >= RTOS_MAX_PRIORITIES)
         return NULL;
@@ -368,13 +368,13 @@ static rtos_handle_t task_create_impl(rtos_tcb_t *tcb,
 // ready list and may run immediately if it has higher priority than the
 // current task.
 //---------------------------------------------------------------------------
-rtos_handle_t rtos_task_create(rtos_tcb_t *tcb,
-                               void       *stack,
-                               size_t      stack_words,
-                               void      (*func)(void *),
-                               void       *arg,
-                               const char *name,
-                               uint8_t     priority)
+rtos_handle_t rtos_task_create(rtos_tcb_t   *tcb,
+                               rtos_stack_t *stack,
+                               size_t        stack_words,
+                               void        (*func)(void *),
+                               void         *arg,
+                               const char   *name,
+                               uint8_t       priority)
 {
 #if RTOS_NUM_CORES > 1
     return task_create_impl(tcb, stack, stack_words, func, arg, name, priority, CORE);
@@ -388,14 +388,14 @@ rtos_handle_t rtos_task_create(rtos_tcb_t *tcb,
 // RTOS_NUM_CORES > 1.
 //---------------------------------------------------------------------------
 #if RTOS_NUM_CORES > 1
-rtos_handle_t rtos_task_create_on_core(rtos_tcb_t *tcb,
-                                       void       *stack,
-                                       size_t      stack_words,
-                                       void      (*func)(void *),
-                                       void       *arg,
-                                       const char *name,
-                                       uint8_t     priority,
-                                       uint8_t     core)
+rtos_handle_t rtos_task_create_on_core(rtos_tcb_t   *tcb,
+                                       rtos_stack_t *stack,
+                                       size_t        stack_words,
+                                       void        (*func)(void *),
+                                       void         *arg,
+                                       const char   *name,
+                                       uint8_t       priority,
+                                       uint8_t       core)
 {
     return task_create_impl(tcb, stack, stack_words, func, arg, name, priority, core);
 }

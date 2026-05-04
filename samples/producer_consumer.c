@@ -31,7 +31,7 @@ static rtos_handle_t g_queue_handle;
 // ---------------------------------------------------------------------------
 
 static rtos_tcb_t producer_tcb;
-static uint32_t   producer_stack[256];
+static rtos_stack_t   producer_stack[256];
 
 static void producer_task(void *arg)
 {
@@ -50,7 +50,7 @@ static void producer_task(void *arg)
 // ---------------------------------------------------------------------------
 
 static rtos_tcb_t consumer_tcb;
-static uint32_t   consumer_stack[256];
+static rtos_stack_t   consumer_stack[256];
 
 static void consumer_task(void *arg)
 {

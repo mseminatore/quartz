@@ -32,11 +32,11 @@ defining these *before* including `rtos.h`:
 #define RTOS_STACK_BYTES_PER_WORD 1  // one byte per "word" on AVR
 ```
 
-User task stacks should be declared as `uint8_t` arrays:
+User task stacks should be declared as `rtos_stack_t` arrays (which is `uint8_t` when `RTOS_STACK_BYTES_PER_WORD` is 1):
 
 ```c
-static rtos_tcb_t my_tcb;
-static uint8_t    my_stack[64];   // 64 bytes
+static rtos_tcb_t   my_tcb;
+static rtos_stack_t my_stack[64];   // 64 bytes on AVR
 
 rtos_task_create(&my_tcb, my_stack, 64, my_task_func, NULL, "myTask", 1);
 ```

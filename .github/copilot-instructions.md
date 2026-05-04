@@ -49,7 +49,7 @@ This is a small preemptive RTOS written in C11 with no dynamic allocation.
 
 **Return codes:** functions that can fail return `RTOS_OK` (0), `RTOS_ERR` (-1), or `RTOS_TIMEOUT` (-2); `rtos_*_create` functions return `NULL` on failure.
 
-**`stack_words` parameter:** counts units of `RTOS_STACK_BYTES_PER_WORD` (4 on 32-bit, 1 on AVR). Stacks must be declared as `uint32_t[]` on 32-bit targets and `uint8_t[]` on AVR.
+**`stack_words` parameter:** counts units of `RTOS_STACK_BYTES_PER_WORD` (4 on 32-bit, 1 on AVR). Declare stacks as `static rtos_stack_t stack[N]` — the typedef resolves to `uint32_t` on 32-bit targets and `uint8_t` on AVR.
 
 **Intrusive lists:** `rtos_tcb_t` has a `next` pointer; the list implementation in `src/list.c` is intrusive and used only inside the scheduler. Queue and timer internal nodes are embedded in their own structs too.
 

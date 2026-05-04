@@ -63,7 +63,7 @@ static volatile int         g_toggle_count = 0;  /* total toggles so far    */
 // ---------------------------------------------------------------------------
 
 static rtos_tcb_t  blink_tcb;
-static uint32_t    blink_stack[256];
+static rtos_stack_t    blink_stack[256];
 
 static void blink_task(void *arg)
 {
@@ -86,7 +86,7 @@ static void blink_task(void *arg)
 // ---------------------------------------------------------------------------
 
 static rtos_tcb_t  monitor_tcb;
-static uint32_t    monitor_stack[256];
+static rtos_stack_t    monitor_stack[256];
 
 #define MONITOR_WINDOW  10          /* print stats every N toggles */
 

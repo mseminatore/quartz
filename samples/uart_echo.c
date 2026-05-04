@@ -103,7 +103,7 @@ static int ring_pop(uint8_t *out)
 // ---------------------------------------------------------------------------
 
 static rtos_tcb_t  g_uart_tcb;
-static uint32_t    g_uart_stack[256];
+static rtos_stack_t    g_uart_stack[256];
 
 static char        g_line[RING_SIZE];   // accumulates a line of input
 static size_t      g_line_len = 0;
@@ -163,7 +163,7 @@ static void hw_install_isr(void)
 #else  // host simulation — a second task feeds characters from stdin
 
 static rtos_tcb_t  g_stdin_tcb;
-static uint32_t    g_stdin_stack[256];
+static rtos_stack_t    g_stdin_stack[256];
 
 static void stdin_feed_task(void *arg)
 {

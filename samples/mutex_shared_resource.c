@@ -50,10 +50,10 @@ static void worker_task(void *arg)
 // ---------------------------------------------------------------------------
 
 static rtos_tcb_t worker1_tcb;
-static uint32_t   worker1_stack[256];
+static rtos_stack_t   worker1_stack[256];
 
 static rtos_tcb_t worker2_tcb;
-static uint32_t   worker2_stack[256];
+static rtos_stack_t   worker2_stack[256];
 
 // ---------------------------------------------------------------------------
 // Entry point

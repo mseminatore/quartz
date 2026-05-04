@@ -82,7 +82,7 @@ static void test_task_create(void)
     SUITE("task create");
 
     static rtos_tcb_t tcb;
-    static uint32_t   stack[64];
+    static rtos_stack_t   stack[64];
 
     rtos_handle_t h = rtos_task_create(&tcb, stack, 64,
                                        (void(*)(void*))0xDEADBEEF, NULL,
@@ -135,7 +135,7 @@ static void test_mutex(void)
 
     // Set up a fake "current task" so the mutex owner is non-NULL
     static rtos_tcb_t fake_task;
-    static uint32_t   fake_stack[32];
+    static rtos_stack_t   fake_stack[32];
     rtos_task_create(&fake_task, fake_stack, 32,
                 (void(*)(void*))0x1, NULL, "fake", 0);
     // Manually set g_current so rtos_mutex_lock sees a non-NULL current task
@@ -275,7 +275,7 @@ static void test_task_notify(void)
     SUITE("task notifications");
 
     static rtos_tcb_t tcb;
-    static uint32_t stack[64];
+    static rtos_stack_t stack[64];
     rtos_handle_t h = rtos_task_create(&tcb, stack, 64, (void(*)(void*))1, NULL, "n", 0);
     TEST(h != NULL);
 
@@ -311,7 +311,7 @@ static void test_delay_until(void)
     SUITE("delay until");
 
     static rtos_tcb_t tcb;
-    static uint32_t stack[64];
+    static rtos_stack_t stack[64];
     rtos_task_create(&tcb, stack, 64, (void(*)(void*))1, NULL, "du", 0);
     g_current = &tcb;
     tcb.state = TASK_RUNNING;
@@ -361,7 +361,7 @@ static void test_delay_until_multi_cycle(void)
     for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
 
     static rtos_tcb_t tcb;
-    static uint32_t   stack[64];
+    static rtos_stack_t   stack[64];
     rtos_task_create(&tcb, stack, 64, (void(*)(void*))1, NULL, "blink", 1);
     g_current = &tcb;
     tcb.state  = TASK_RUNNING;
@@ -549,7 +549,7 @@ static void test_priority_inheritance(void)
     for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
 
     static rtos_tcb_t low_tcb, high_tcb;
-    static uint32_t   low_stack[64], high_stack[64];
+    static rtos_stack_t   low_stack[64], high_stack[64];
 
     // Low priority = 3 (higher number = lower priority in this RTOS)
     rtos_task_create(&low_tcb,  low_stack,  64, (void(*)(void*))1, NULL, "low",  3);
@@ -618,7 +618,7 @@ static void test_priority_inheritance_multi_mutex(void)
     for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
 
     static rtos_tcb_t low_tcb, mid_tcb, high_tcb;
-    static uint32_t   low_stack[64], mid_stack[64], high_stack[64];
+    static rtos_stack_t   low_stack[64], mid_stack[64], high_stack[64];
 
     rtos_task_create(&low_tcb,  low_stack,  64, (void(*)(void*))1, NULL, "low",  5);
     rtos_task_create(&mid_tcb,  mid_stack,  64, (void(*)(void*))1, NULL, "mid",  2);
@@ -972,7 +972,7 @@ static void test_queue_blocking_send(void)
     static rtos_queue_t q;
     static int   buf[2];
     static rtos_tcb_t   sender_tcb, receiver_tcb;
-    static uint32_t     sender_stack[64], receiver_stack[64];
+    static rtos_stack_t     sender_stack[64], receiver_stack[64];
 
     g_blocked = NULL;
     g_ready_bitmap = 0;
@@ -1366,7 +1366,7 @@ static void test_task_inspection(void)
     for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
 
     static rtos_tcb_t inspect_tcb;
-    static uint32_t   inspect_stack[64];
+    static rtos_stack_t   inspect_stack[64];
     rtos_handle_t h = rtos_task_create(&inspect_tcb, inspect_stack, 64,
                                         (void(*)(void*))1, NULL, "probe", 2);
     TEST(h != NULL);
@@ -1405,7 +1405,7 @@ static void test_notify_clear(void)
     SUITE("task notify_clear");
 
     static rtos_tcb_t nc_tcb;
-    static uint32_t   nc_stack[64];
+    static rtos_stack_t   nc_stack[64];
     rtos_handle_t h = rtos_task_create(&nc_tcb, nc_stack, 64,
                                         (void(*)(void*))1, NULL, "nc", 2);
     g_current = &nc_tcb;
@@ -1436,7 +1436,7 @@ static void test_notify_value(void)
     SUITE("task notify value (set/increment/overwrite)");
 
     static rtos_tcb_t nv_tcb;
-    static uint32_t   nv_stack[64];
+    static rtos_stack_t   nv_stack[64];
     rtos_handle_t h = rtos_task_create(&nv_tcb, nv_stack, 64,
                                         (void(*)(void*))1, NULL, "nv", 2);
     g_current = &nv_tcb;
@@ -2282,7 +2282,7 @@ static void test_max_tasks(void)
     g_all_tasks_count = 0;
 
     static rtos_tcb_t  tcbs[RTOS_MAX_TASKS + 1];
-    static uint32_t    stacks[RTOS_MAX_TASKS + 1][64];
+    static rtos_stack_t    stacks[RTOS_MAX_TASKS + 1][64];
 
     // Create RTOS_MAX_TASKS tasks — all should succeed
     for (int i = 0; i < RTOS_MAX_TASKS; i++) {
