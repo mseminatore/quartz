@@ -16,13 +16,13 @@ cmake_minimum_required(VERSION 3.13)
 #   cmake -B build_esp32s3 -DCMAKE_TOOLCHAIN_FILE=cmake/esp32s3_qemu.cmake
 #
 # For host unit tests (default, no hardware):
-#   cmake -B build && cmake --build build && ./build/rtos_test
+#   cmake -B build && cmake --build build && ./build/quartz_test
 #
 # For ARM Cortex-M4F (generic bare-metal, e.g. STM32F4xx):
 #   cmake -B build_cm4 -DCMAKE_TOOLCHAIN_FILE=cmake/arm_cm4.cmake
 #
 # As a subdirectory of another CMake project (e.g. a Pico SDK app):
-#   add_subdirectory(deps/rtos)   # Pico SDK must already be initialised
+#   add_subdirectory(deps/quartz)   # Pico SDK must already be initialised
 
 # ---------------------------------------------------------------------------
 # Standalone vs subdirectory — bootstrap only when we are the root project
@@ -41,7 +41,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         set(RTOS_TARGET_PICO OFF)
     endif()
 
-    project(rtos C ASM)
+    project(quartz C ASM)
     set(CMAKE_C_STANDARD 11)
 
     if(RTOS_TARGET_PICO)
@@ -130,7 +130,7 @@ endif()
 message(STATUS "rtos: selected port = ${_rtos_port}")
 
 # ---------------------------------------------------------------------------
-# RTOS library (architecture-independent kernel sources)
+# Quartz library (architecture-independent kernel sources)
 # ---------------------------------------------------------------------------
 
 set(RTOS_KERNEL_SOURCES
@@ -184,45 +184,45 @@ else()
     set(RTOS_PORT_SOURCES "")
 endif()
 
-add_library(rtos STATIC
+add_library(quartz STATIC
     ${RTOS_KERNEL_SOURCES}
     ${RTOS_PORT_SOURCES}
 )
 
-target_include_directories(rtos PUBLIC
+target_include_directories(quartz PUBLIC
     include
     src          # for internal port.h and list.h
 )
 
 if(MSVC)
-    target_compile_options(rtos PRIVATE /W3)
+    target_compile_options(quartz PRIVATE /W3)
 else()
-    target_compile_options(rtos PRIVATE -fno-builtin)
+    target_compile_options(quartz PRIVATE -fno-builtin)
 endif()
 
 if(RTOS_TARGET_PICO)
-    target_link_libraries(rtos pico_stdlib)
+    target_link_libraries(quartz pico_stdlib)
     # Allow the parent project to override RTOS_CPU_HZ (e.g. Pico W uses 133 MHz).
     # The default is 125 MHz (standard RP2040 / Pico).
     if(NOT DEFINED RTOS_CPU_HZ)
         set(RTOS_CPU_HZ 125000000)
     endif()
-    target_compile_definitions(rtos PRIVATE RTOS_CPU_HZ=${RTOS_CPU_HZ})
+    target_compile_definitions(quartz PRIVATE RTOS_CPU_HZ=${RTOS_CPU_HZ})
 elseif(RTOS_TARGET_CM4)
     # Allow the parent project to override RTOS_CPU_HZ for specific M4 boards.
     # Default: 168 MHz (STM32F4xx).  Override e.g. -DRTOS_CPU_HZ=72000000 for STM32F3xx.
     if(DEFINED RTOS_CPU_HZ)
-        target_compile_definitions(rtos PRIVATE RTOS_CPU_HZ=${RTOS_CPU_HZ})
+        target_compile_definitions(quartz PRIVATE RTOS_CPU_HZ=${RTOS_CPU_HZ})
     endif()
     # Allow overriding the BASEPRI critical-section threshold.
     if(DEFINED RTOS_BASEPRI_VALUE)
-        target_compile_definitions(rtos PRIVATE RTOS_BASEPRI_VALUE=${RTOS_BASEPRI_VALUE})
+        target_compile_definitions(quartz PRIVATE RTOS_BASEPRI_VALUE=${RTOS_BASEPRI_VALUE})
     endif()
     # Propagate the FPU knob to both C and ASM (port_asm.S guards on it).
     # CMake routes target_compile_definitions to all language drivers, so this
     # reaches the assembler without us having to #include rtos_config.h from .S.
     if(RTOS_CM4_FPU)
-        target_compile_definitions(rtos PUBLIC RTOS_CM4_FPU=1)
+        target_compile_definitions(quartz PUBLIC RTOS_CM4_FPU=1)
     endif()
 endif()
 
@@ -236,14 +236,14 @@ foreach(_def
         RTOS_NUM_CORES
         RTOS_TRACE_BUFFER_BYTES)
     if(DEFINED ${_def})
-        target_compile_definitions(rtos PUBLIC ${_def}=${${_def}})
+        target_compile_definitions(quartz PUBLIC ${_def}=${${_def}})
     endif()
 endforeach()
 
 # Activate the chosen trace backend (also turns on RTOS_ENABLE_TRACE so that
 # the rtos_trace_* hook macros in rtos_trace.h expand to real calls).
 if(RTOS_TRACE_BACKEND STREQUAL "chrome")
-    target_compile_definitions(rtos PUBLIC
+    target_compile_definitions(quartz PUBLIC
         RTOS_ENABLE_TRACE=1
         RTOS_TRACE_BACKEND_CHROME=1)
 endif()
@@ -261,15 +261,15 @@ endif()
 if(NOT RTOS_TARGET_PICO AND NOT RTOS_TARGET_CM0PLUS AND NOT RTOS_TARGET_AVR AND NOT RTOS_TARGET_RISCV AND NOT RTOS_TARGET_ESP32S3 AND NOT RTOS_TARGET_CM4)
     enable_testing()
 
-    add_executable(rtos_test test/test_rtos.c extern/testy/test_main.c)
-    target_include_directories(rtos_test PRIVATE include src extern/testy)
+    add_executable(quartz_test test/test_rtos.c extern/testy/test_main.c)
+    target_include_directories(quartz_test PRIVATE include src extern/testy)
     if(MSVC)
-        target_compile_options(rtos_test PRIVATE /W3)
+        target_compile_options(quartz_test PRIVATE /W3)
     else()
-        target_compile_options(rtos_test PRIVATE -fno-builtin)
+        target_compile_options(quartz_test PRIVATE -fno-builtin)
     endif()
 
-    add_test(NAME rtos_test COMMAND rtos_test)
+    add_test(NAME quartz_test COMMAND quartz_test)
 
     # ---------------------------------------------------------------------------
     # Sample programs (host simulation — hardware calls are stubbed inside each file)
@@ -332,7 +332,7 @@ if(RTOS_TARGET_PICO)
     if(PICO_BOARD STREQUAL "pico_w")
         add_executable(sample_wifi_http samples/wifi_http.c)
         target_link_libraries(sample_wifi_http
-            rtos
+            quartz
             pico_stdlib
             pico_cyw43_arch_lwip_threadsafe_background
         )
