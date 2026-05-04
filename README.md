@@ -145,7 +145,7 @@ See [PORTS.md](PORTS.md) for more details.
 ### Kernel
 ```c
 void     rtos_start(void);              // start scheduler — never returns!
-uint32_t rtos_task_tick_count(void);
+rtos_tick_t rtos_task_tick_count(void);
 ```
 
 ### Tasks
@@ -163,12 +163,12 @@ rtos_handle_t h = rtos_task_create_on_core(&my_tcb, my_stack, 256,
                                             my_task_func, NULL, "myTask", 3,
                                             1 /* core */);
 
-void rtos_task_delay(uint32_t ticks);   // block for N ticks
+void rtos_task_delay(rtos_tick_t ticks);   // block for N ticks
 
 // Drift-free periodic delay. Initialise *last_wake to rtos_task_tick_count()
 // before the loop, then call on each iteration. Advances *last_wake by period
 // each call, delaying only the remaining time until the next deadline.
-void rtos_task_delay_until(uint32_t *last_wake_tick, uint32_t period_ticks);
+void rtos_task_delay_until(rtos_tick_t *last_wake_tick, rtos_tick_t period_ticks);
 
 void rtos_task_yield(void);
 void rtos_task_suspend(rtos_handle_t);
@@ -180,7 +180,7 @@ void rtos_task_delete(rtos_handle_t);   // pass NULL for current task
 // allocation. Includes binary, set-bits, counting, and overwrite semantics.
 void rtos_task_notify(rtos_handle_t task);            // from task context
 void rtos_task_notify_from_isr(rtos_handle_t task);  // from ISR context
-int  rtos_task_notify_wait(uint32_t timeout_ticks);  // RTOS_OK or RTOS_TIMEOUT
+int  rtos_task_notify_wait(rtos_tick_t timeout_ticks);  // RTOS_OK or RTOS_TIMEOUT
 void rtos_task_notify_clear(void);   // discard a pending notification without waiting
 
 // Value-passing notifications (FreeRTOS-style):
@@ -192,7 +192,7 @@ void rtos_task_notify_clear(void);   // discard a pending notification without w
 int  rtos_task_notify_value(rtos_handle_t task, rtos_notify_action_t action, uint32_t value);
 int  rtos_task_notify_value_from_isr(rtos_handle_t task, rtos_notify_action_t action, uint32_t value);
 int  rtos_task_notify_wait_value(uint32_t clear_on_entry, uint32_t clear_on_exit,
-                                 uint32_t *value_out, uint32_t timeout_ticks);
+                                 uint32_t *value_out, rtos_tick_t timeout_ticks);
 
 // Inspection and priority control
 rtos_task_state_t rtos_task_get_state(rtos_handle_t task);    // TASK_READY etc.

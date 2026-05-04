@@ -77,10 +77,6 @@
 #   define RTOS_TIMG0_BASE_ADDR   0x6001F000UL
 #endif
 
-// Special timeout values
-#define RTOS_WAIT_FOREVER   ((uint32_t)0xFFFFFFFFUL)
-#define RTOS_NO_WAIT        ((uint32_t)0UL)
-
 // --------------------------------------------------------------------------
 // Portable tick type — rtos_tick_t
 // --------------------------------------------------------------------------
@@ -112,15 +108,11 @@
 #if RTOS_TICK_TYPE_16BIT
     typedef uint16_t rtos_tick_t;
 #   define RTOS_TICK_MAX        ((rtos_tick_t)0xFFFFU)
-#   undef  RTOS_WAIT_FOREVER
-#   undef  RTOS_NO_WAIT
 #   define RTOS_WAIT_FOREVER    ((rtos_tick_t)0xFFFFU)
 #   define RTOS_NO_WAIT         ((rtos_tick_t)0U)
 #else
     typedef uint32_t rtos_tick_t;
 #   define RTOS_TICK_MAX        ((rtos_tick_t)0xFFFFFFFFUL)
-#   undef  RTOS_WAIT_FOREVER
-#   undef  RTOS_NO_WAIT
 #   define RTOS_WAIT_FOREVER    ((rtos_tick_t)0xFFFFFFFFUL)
 #   define RTOS_NO_WAIT         ((rtos_tick_t)0UL)
 #endif
