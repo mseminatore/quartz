@@ -61,7 +61,7 @@ cmake --build build_rv32
 
 # Run on QEMU virt machine (requires a linker script to place the binary at 0x80000000)
 qemu-system-riscv32 -machine virt -nographic -bios none \
-                    -kernel build_rv32/rtos.elf
+                    -kernel build_rv32/quartz.elf
 ```
 
 **SiFive HiFive1 / FE310 (32 768 Hz MTIME):** override the MTIME frequency in
@@ -91,7 +91,7 @@ cmake --build build_esp32s3
 
 # Run on Espressif QEMU fork
 qemu-system-xtensa -machine esp32s3 -nographic \
-                   -kernel build_esp32s3/rtos.elf
+                   -kernel build_esp32s3/quartz.elf
 ```
 
 **Key design notes (ESP32-S3):**

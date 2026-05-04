@@ -23,10 +23,10 @@ jobs:
                 -DRTOS_PORT=cm3 \
                 -DCMAKE_TOOLCHAIN_FILE=cmake/arm_cm3.cmake
 
-      - name: Build rtos library
-        run: cmake --build build_cm3 --target rtos --parallel
+      - name: Build quartz library
+        run: cmake --build build_cm3 --target quartz --parallel
 
       - name: Verify librtos.a
         run: |
-          test -f build_cm3/librtos.a
-          ls -l build_cm3/librtos.a
+          test -f build_cm3/libquartz.a
+          ls -l build_cm3/libquartz.a

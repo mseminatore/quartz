@@ -23,10 +23,10 @@ jobs:
                 -DRTOS_PORT=avr \
                 -DCMAKE_TOOLCHAIN_FILE=cmake/avr_atmega328p.cmake
 
-      - name: Build rtos library
-        run: cmake --build build_avr --target rtos --parallel
+      - name: Build quartz library
+        run: cmake --build build_avr --target quartz --parallel
 
       - name: Verify librtos.a
         run: |
-          test -f build_avr/librtos.a
-          ls -l build_avr/librtos.a
+          test -f build_avr/libquartz.a
+          ls -l build_avr/libquartz.a

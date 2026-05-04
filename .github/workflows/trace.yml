@@ -24,8 +24,8 @@ jobs:
 
       - name: Build & run unit tests (covers trace_chrome ring buffer)
         run: |
-          cmake --build build --parallel --target rtos_test
-          ctest --test-dir build --output-on-failure -R rtos_test
+          cmake --build build --parallel --target quartz_test
+          ctest --test-dir build --output-on-failure -R quartz_test
 
       - name: Capture demo output
         run: ./build/sample_trace_demo > capture.hex

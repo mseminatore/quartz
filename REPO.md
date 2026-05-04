@@ -1,7 +1,7 @@
 # Quartz — repository layout
 
 ```
-rtos/
+quartz/
 ├── include/          # Public API headers
 │   ├── rtos.h        # Master include
 │   ├── rtos_config.h # Compile-time knobs

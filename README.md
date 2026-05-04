@@ -30,11 +30,11 @@ suppported, please consider contributing.
 
 | Family       | CI status |
 |--------------|-----------|
-| Host         | [![host-linux](https://github.com/mseminatore/rtos/actions/workflows/host-linux.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/host-linux.yml) [![host-windows](https://github.com/mseminatore/rtos/actions/workflows/host-windows.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/host-windows.yml) |
-| ARM Cortex-M | [![cm0plus](https://github.com/mseminatore/rtos/actions/workflows/cm0plus.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm0plus.yml) [![cm3](https://github.com/mseminatore/rtos/actions/workflows/cm3.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm3.yml) [![cm4](https://github.com/mseminatore/rtos/actions/workflows/cm4.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm4.yml) [![cm4-fpu](https://github.com/mseminatore/rtos/actions/workflows/cm4-fpu.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm4-fpu.yml) [![cm7](https://github.com/mseminatore/rtos/actions/workflows/cm7.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/cm7.yml) |
-| AVR          | [![avr](https://github.com/mseminatore/rtos/actions/workflows/avr.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/avr.yml) |
-| RISC-V       | [![riscv](https://github.com/mseminatore/rtos/actions/workflows/riscv.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/riscv.yml) |
-| Tracing      | [![trace](https://github.com/mseminatore/rtos/actions/workflows/trace.yml/badge.svg)](https://github.com/mseminatore/rtos/actions/workflows/trace.yml) |
+| Host         | [![host-linux](https://github.com/mseminatore/quartz/actions/workflows/host-linux.yml/badge.svg)](https://github.com/mseminatore/quartz/actions/workflows/host-linux.yml) [![host-windows](https://github.com/mseminatore/quartz/actions/workflows/host-windows.yml/badge.svg)](https://github.com/mseminatore/quartz/actions/workflows/host-windows.yml) |
+| ARM Cortex-M | [![cm0plus](https://github.com/mseminatore/quartz/actions/workflows/cm0plus.yml/badge.svg)](https://github.com/mseminatore/quartz/actions/workflows/cm0plus.yml) [![cm3](https://github.com/mseminatore/quartz/actions/workflows/cm3.yml/badge.svg)](https://github.com/mseminatore/quartz/actions/workflows/cm3.yml) [![cm4](https://github.com/mseminatore/quartz/actions/workflows/cm4.yml/badge.svg)](https://github.com/mseminatore/quartz/actions/workflows/cm4.yml) [![cm4-fpu](https://github.com/mseminatore/quartz/actions/workflows/cm4-fpu.yml/badge.svg)](https://github.com/mseminatore/quartz/actions/workflows/cm4-fpu.yml) [![cm7](https://github.com/mseminatore/quartz/actions/workflows/cm7.yml/badge.svg)](https://github.com/mseminatore/quartz/actions/workflows/cm7.yml) |
+| AVR          | [![avr](https://github.com/mseminatore/quartz/actions/workflows/avr.yml/badge.svg)](https://github.com/mseminatore/quartz/actions/workflows/avr.yml) |
+| RISC-V       | [![riscv](https://github.com/mseminatore/quartz/actions/workflows/riscv.yml/badge.svg)](https://github.com/mseminatore/quartz/actions/workflows/riscv.yml) |
+| Tracing      | [![trace](https://github.com/mseminatore/quartz/actions/workflows/trace.yml/badge.svg)](https://github.com/mseminatore/quartz/actions/workflows/trace.yml) |
 
 **Design goals:**
 - Preemptive, priority-based scheduling (round-robin within equal priorities)
@@ -392,10 +392,10 @@ python3 tools/trace_to_chrome.py capture.hex --hex -o trace.json
 From a PowerShell or `cmd` prompt at the repo root:
 
 ```powershell
-wsl -e bash -lc "cd /mnt/c/dev/rtos && cmake -B build_wsl_trace -DRTOS_TRACE_BACKEND=chrome"
-wsl -e bash -lc "cd /mnt/c/dev/rtos && cmake --build build_wsl_trace --target sample_trace_demo"
-wsl -e bash -lc "cd /mnt/c/dev/rtos && ./build_wsl_trace/sample_trace_demo > capture.hex"
-wsl -e bash -lc "cd /mnt/c/dev/rtos && python3 tools/trace_to_chrome.py capture.hex --hex -o trace.json"
+wsl -e bash -lc "cd /mnt/c/dev/quartz && cmake -B build_wsl_trace -DRTOS_TRACE_BACKEND=chrome"
+wsl -e bash -lc "cd /mnt/c/dev/quartz && cmake --build build_wsl_trace --target sample_trace_demo"
+wsl -e bash -lc "cd /mnt/c/dev/quartz && ./build_wsl_trace/sample_trace_demo > capture.hex"
+wsl -e bash -lc "cd /mnt/c/dev/quartz && python3 tools/trace_to_chrome.py capture.hex --hex -o trace.json"
 ```
 
 Then open `trace.json` (which now lives in your repo on the Windows side)

@@ -23,10 +23,10 @@ jobs:
                 -DRTOS_PORT=cm4 \
                 -DCMAKE_TOOLCHAIN_FILE=cmake/arm_cm4.cmake
 
-      - name: Build rtos library
-        run: cmake --build build_cm4 --target rtos --parallel
+      - name: Build quartz library
+        run: cmake --build build_cm4 --target quartz --parallel
 
       - name: Verify librtos.a
         run: |
-          test -f build_cm4/librtos.a
-          ls -l build_cm4/librtos.a
+          test -f build_cm4/libquartz.a
+          ls -l build_cm4/libquartz.a

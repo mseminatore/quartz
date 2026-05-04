@@ -7,7 +7,7 @@
 #
 #   # Run on Espressif QEMU fork:
 #   qemu-system-xtensa -machine esp32s3 -nographic \
-#                      -kernel build_esp32s3/rtos.elf
+#                      -kernel build_esp32s3/quartz.elf
 #
 # Requires Espressif's Xtensa toolchain (xtensa-esp32s3-elf-gcc).
 # Via ESP-IDF: source ~/.espressif/tools/.../activate (sets PATH).

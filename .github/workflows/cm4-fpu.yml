@@ -24,10 +24,10 @@ jobs:
                 -DRTOS_CM4_FPU=1 \
                 -DCMAKE_TOOLCHAIN_FILE=cmake/arm_cm4.cmake
 
-      - name: Build rtos library
-        run: cmake --build build_cm4_fpu --target rtos --parallel
+      - name: Build quartz library
+        run: cmake --build build_cm4_fpu --target quartz --parallel
 
       - name: Verify librtos.a
         run: |
-          test -f build_cm4_fpu/librtos.a
-          ls -l build_cm4_fpu/librtos.a
+          test -f build_cm4_fpu/libquartz.a
+          ls -l build_cm4_fpu/libquartz.a

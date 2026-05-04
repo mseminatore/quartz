@@ -23,10 +23,10 @@ jobs:
                 -DRTOS_PORT=riscv \
                 -DCMAKE_TOOLCHAIN_FILE=cmake/riscv32_clint.cmake
 
-      - name: Build rtos library
-        run: cmake --build build_riscv --target rtos --parallel
+      - name: Build quartz library
+        run: cmake --build build_riscv --target quartz --parallel
 
       - name: Verify librtos.a
         run: |
-          test -f build_riscv/librtos.a
-          ls -l build_riscv/librtos.a
+          test -f build_riscv/libquartz.a
+          ls -l build_riscv/libquartz.a

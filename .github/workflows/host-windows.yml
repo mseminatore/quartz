@@ -15,8 +15,8 @@ jobs:
       - name: Configure
         run: cmake -B build
 
-      - name: Build (rtos_test only)
-        run: cmake --build build --config Debug --target rtos_test --parallel
+      - name: Build (quartz_test only)
+        run: cmake --build build --config Debug --target quartz_test --parallel
 
       - name: Test
         working-directory: build
