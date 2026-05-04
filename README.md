@@ -1,6 +1,30 @@
-# Quartz
+# Quartz RTOS
 
 *A small, fast, portable, real-time operating system written in C.*
+
+> The name Quartz suggest timely, accurate, precise, solid. Matching many of 
+> the project design goals.
+
+## Why Quartz RTOS
+
+For fun and for learning, I build many small projects using microcontrollers 
+ranging from 8-bit like PIC and AVR, up to 32-bit processors like the ARM-M0+ 
+(RPi PICO) and Xtensa L7 (ESP32-S3).
+
+While programming small projects to bare metal is usually adequate, there are 
+times when the the support of a minimal operating system would be useful.
+
+I evaluated FreeRTOS and Zephyr. Both are highly capable and mature. However, 
+both seemed larger than I needed. Having previously written written a small 
+multi-tasking kernel in assembly language as part of the 
+[bintools](https://github.com/mseminatore/bintools) project I decided to create
+my own.
+
+I'll continue to add new ports as needed. The most likely next candidate is the
+RP2350 (ARM Cortex-M33) for the RPi PICO 2. If there is a port you'd like added,
+please consider contributing.
+
+## Build Status
 
 | Family       | CI status |
 |--------------|-----------|
