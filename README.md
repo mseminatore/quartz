@@ -54,6 +54,25 @@ supported, let us know, and please consider contributing.
 
 ---
 
+## Arduino
+
+QuartzRTOS can be used as an **Arduino library** on AVR boards (Uno, Nano, Mega).
+See [`extras/arduino/README.md`](extras/arduino/README.md) for full installation
+and usage instructions.
+
+> **Note:** The AVR port uses Timer1. This conflicts with `tone()`, the `Servo`
+> library, and other Timer1-dependent libraries.
+
+To assemble the Arduino library from the main source tree (run before release):
+
+```sh
+python3 tools/package_arduino.py
+```
+
+Then install `extras/arduino/` via **Sketch → Include Library → Add .ZIP Library**.
+
+---
+
 ## Configuration
 
 Edit `include/rtos_config.h` (or define before including `rtos.h`):
