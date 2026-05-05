@@ -106,19 +106,26 @@ INCLUDE_REWRITES = [
 
 
 def get_version():
-    """Return version string from the most recent v* git tag, or '1.0.0' fallback."""
-    try:
-        result = subprocess.run(
-            ["git", "describe", "--tags", "--match", "v*", "--abbrev=0"],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-        )
-        tag = result.stdout.strip()
-        if re.match(r"^v\d+\.\d+\.\d+$", tag):
-            return tag[1:]  # strip leading 'v'
-    except FileNotFoundError:
-        pass
+    """Return version string from the most recent v* or arduino-v* git tag.
+
+    Strips the leading 'v' or 'arduino-v' prefix so callers always get a
+    bare semver string (e.g. '1.0.0').  Falls back to '1.0.0' when no
+    matching tag is found or git is unavailable.
+    """
+    for match_pattern in ("arduino-v*", "v*"):
+        try:
+            result = subprocess.run(
+                ["git", "describe", "--tags", "--match", match_pattern, "--abbrev=0"],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+            )
+            tag = result.stdout.strip()
+            m = re.match(r"^(?:arduino-)?v(\d+\.\d+\.\d+)$", tag)
+            if m:
+                return m.group(1)
+        except FileNotFoundError:
+            break
     return "1.0.0"
 
 

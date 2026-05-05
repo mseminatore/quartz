@@ -34,18 +34,46 @@ local-only changes will not be included in the release.
 
 ## Step-by-step release
 
+There are two independent release types, each triggered by a different tag
+prefix.
+
+### Full project release — tag prefix `v`
+
+Creates a GitHub Release titled **"Quartz RTOS vX.Y.Z"**.
+
 ```sh
 # 1. Commit and push all changes
 git add .
 git commit -m "Prepare release v1.2.3"
 git push origin main
 
-# 2. Create an annotated tag (replace 1.2.3 with the actual version)
+# 2. Create an annotated tag
 git tag -a v1.2.3 -m "Release 1.2.3"
 
-# 3. Push the tag — this triggers the release workflow
+# 3. Push the tag — triggers release.yml
 git push origin v1.2.3
 ```
+
+### Arduino library release — tag prefix `arduino-v`
+
+Creates a GitHub Release titled **"QuartzRTOS Arduino Library vX.Y.Z"** with
+`QuartzRTOS.zip` attached.
+
+```sh
+# 1. Commit and push all changes
+git add .
+git commit -m "Prepare Arduino library release v1.2.3"
+git push origin main
+
+# 2. Create an annotated tag with the arduino- prefix
+git tag -a arduino-v1.2.3 -m "Arduino Library Release 1.2.3"
+
+# 3. Push the tag — triggers release-arduino.yml
+git push origin arduino-v1.2.3
+```
+
+The versions can track together or diverge — e.g. you can ship an Arduino
+library bug fix as `arduino-v1.0.1` without bumping the full project version.
 
 That's it.  You do not need to edit `library.properties`, `rtos_version.h`, or
 any other file — the packaging script reads the tag and stamps the version
@@ -85,10 +113,15 @@ Or they can clone/download the `extras/arduino/` directory directly.
 Delete the tag locally and remotely, then re-push:
 
 ```sh
+# Full project release
 git tag -d v1.2.3
 git push origin --delete v1.2.3
-
-# Fix whatever needs fixing, commit, push, then re-tag
 git tag -a v1.2.3 -m "Release 1.2.3"
 git push origin v1.2.3
+
+# Arduino library release
+git tag -d arduino-v1.2.3
+git push origin --delete arduino-v1.2.3
+git tag -a arduino-v1.2.3 -m "Arduino Library Release 1.2.3"
+git push origin arduino-v1.2.3
 ```
