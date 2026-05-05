@@ -3,21 +3,21 @@
 *A small, fast, portable, real-time operating system written in C.*
 
 > The name Quartz was chosen because it suggests many of the project design 
-> goals. Specifically, well-known attributes of Quartz crystals are that they 
-> are timely, accurate, precise, and solid.
+> goals. Specifically, Quartz crystals are known to be
+> timely, accurate, and precise. And of course rock solid.
 
 ## Why Quartz RTOS
 
-For fun and for learning, I build many small projects using microcontrollers 
-ranging from 8-bit like PIC and AVR, up to 32-bit processors like the ARM-M0+ 
-(RPi PICO) and Xtensa L7 (ESP32-S3).
+Primarily, Quarts was started for fun and for learning. I build many small 
+projects using microcontrollers ranging from 8-bit like PIC and AVR, up to 32-bit processors like the ARM-M0+ (RPi Pico) and Xtensa L7 (ESP32-S3).
 
-While programming small projects to bare metal is usually adequate, there are 
-times when the the support of a minimal operating system would be useful. For
-example, when multiple tasks and/or multiple cores are needed.
+Programming small projects to bare metal is fun and usually adequate. However, 
+there are times when the the support of a minimal operating system can be 
+useful. Modern microcontrollers including AVR can efficently support
+pre-emptive multi-tasking.
 
 I started by evaluating FreeRTOS and Zephyr. Both are highly capable, well 
-supported and mature. Still, they both seemed like more than I needed. 
+supported and mature. Still, they both seemed like more than I really needed. 
 Having previously written a multi-tasking kernel in assembly language as part of the 
 [bintools](https://github.com/mseminatore/bintools) project I decided to create
 my own.
