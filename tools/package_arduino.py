@@ -27,6 +27,7 @@ import argparse
 import os
 import re
 import shutil
+import subprocess
 import sys
 import zipfile
 
@@ -55,6 +56,7 @@ INTERNAL_HEADERS = [
 # Public headers to copy
 PUBLIC_HEADERS = [
     "include/rtos.h",
+    "include/rtos_version.h",
     "include/rtos_config.h",
     "include/rtos_task.h",
     "include/rtos_sem.h",
@@ -101,6 +103,58 @@ INCLUDE_REWRITES = [
     (r'#include\s+"\.\.\/\.\.\/src\/([^"]+)"',     r'#include "\1"'),
     (r'#include\s+"\.\.\/src\/([^"]+)"',           r'#include "\1"'),
 ]
+
+
+def get_version():
+    """Return version string from the most recent v* git tag, or '1.0.0' fallback."""
+    try:
+        result = subprocess.run(
+            ["git", "describe", "--tags", "--match", "v*", "--abbrev=0"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+        )
+        tag = result.stdout.strip()
+        if re.match(r"^v\d+\.\d+\.\d+$", tag):
+            return tag[1:]  # strip leading 'v'
+    except FileNotFoundError:
+        pass
+    return "1.0.0"
+
+
+def stamp_version_header(version):
+    """Overwrite include/rtos_version.h with the resolved version."""
+    major, minor, patch = version.split(".")
+    header_path = os.path.join(REPO_ROOT, "include", "rtos_version.h")
+    content = (
+        "//---------------------------------------------------------------------------\n"
+        "// rtos_version.h — Auto-generated; do not edit manually.\n"
+        "// Re-generate by running CMake or tools/package_arduino.py.\n"
+        "//---------------------------------------------------------------------------\n"
+        "#ifndef RTOS_VERSION_H\n"
+        "#define RTOS_VERSION_H\n"
+        "\n"
+        f"#define RTOS_VERSION_MAJOR  {major}\n"
+        f"#define RTOS_VERSION_MINOR  {minor}\n"
+        f"#define RTOS_VERSION_PATCH  {patch}\n"
+        f'#define RTOS_VERSION_STRING "{version}"\n'
+        "\n"
+        "#endif // RTOS_VERSION_H\n"
+    )
+    with open(header_path, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"  stamped: include/rtos_version.h  ({version})")
+
+
+def stamp_library_properties(version):
+    """Update the version= line in extras/arduino/library.properties."""
+    props_path = os.path.join(ARDUINO_ROOT, "library.properties")
+    with open(props_path, "r", encoding="utf-8") as f:
+        content = f.read()
+    content = re.sub(r"^version=.*$", f"version={version}", content, flags=re.MULTILINE)
+    with open(props_path, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"  stamped: extras/arduino/library.properties  ({version})")
 
 
 def rewrite_includes(text):
@@ -163,10 +217,16 @@ def main():
              "Pass a custom path to override.",
     )
     args = parser.parse_args()
-    print(f"Packaging Quartz RTOS Arduino library")
+
+    version = get_version()
+    print(f"Packaging Quartz RTOS Arduino library  (version {version})")
     print(f"  repo root : {REPO_ROOT}")
     print(f"  output    : {ARDUINO_SRC}")
     print()
+
+    print("Stamping version files:")
+    stamp_version_header(version)
+    stamp_library_properties(version)
 
     os.makedirs(ARDUINO_SRC, exist_ok=True)
 

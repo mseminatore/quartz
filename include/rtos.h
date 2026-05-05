@@ -6,6 +6,7 @@
 #ifndef RTOS_H
 #define RTOS_H
 
+#include "rtos_version.h"
 #include "rtos_config.h"
 #include "rtos_task.h"
 #include "rtos_sem.h"

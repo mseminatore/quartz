@@ -41,8 +41,16 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         set(RTOS_TARGET_PICO OFF)
     endif()
 
-    project(quartz C ASM)
+    include(cmake/version.cmake)
+    project(quartz VERSION "${RTOS_VERSION_MAJOR}.${RTOS_VERSION_MINOR}.${RTOS_VERSION_PATCH}" LANGUAGES C ASM)
     set(CMAKE_C_STANDARD 11)
+
+    # Stamp include/rtos_version.h from the .in template
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/rtos_version.h.in"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/rtos_version.h"
+        @ONLY
+    )
 
     if(RTOS_TARGET_PICO)
         pico_sdk_init()

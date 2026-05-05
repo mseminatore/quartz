@@ -1,0 +1,14 @@
+//---------------------------------------------------------------------------
+// rtos_version.h — Auto-generated; do not edit manually.
+// Source: include/rtos_version.h.in  (stamped by CMake configure_file or
+//         tools/package_arduino.py).
+//---------------------------------------------------------------------------
+#ifndef RTOS_VERSION_H
+#define RTOS_VERSION_H
+
+#define RTOS_VERSION_MAJOR  @RTOS_VERSION_MAJOR@
+#define RTOS_VERSION_MINOR  @RTOS_VERSION_MINOR@
+#define RTOS_VERSION_PATCH  @RTOS_VERSION_PATCH@
+#define RTOS_VERSION_STRING "@RTOS_VERSION@"
+
+#endif // RTOS_VERSION_H

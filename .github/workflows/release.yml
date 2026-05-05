@@ -1,0 +1,38 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to create a GitHub Release
+
+    steps:
+      - name: Checkout (full history for git describe)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - name: Configure (host — runs cmake/version.cmake and stamps rtos_version.h)
+        run: cmake -B build
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure
+
+      - name: Package Arduino library
+        run: python3 tools/package_arduino.py --zip QuartzRTOS.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: QuartzRTOS.zip
+          generate_release_notes: true
