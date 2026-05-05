@@ -8,7 +8,7 @@
 
 ## Why Quartz RTOS
 
-Primarily, Quarts was started for fun and for learning. I build many small 
+Primarily, Quartz was started for fun and for learning. I build many small 
 projects using microcontrollers ranging from 8-bit like PIC and AVR, up to 32-bit processors like the ARM-M0+ (RPi Pico) and Xtensa L7 (ESP32-S3).
 
 Programming small projects to bare metal is fun and usually adequate. However, 
@@ -54,9 +54,9 @@ supported, let us know, and please consider contributing.
 
 ---
 
-## Arduino
+## Arduino Library
 
-QuartzRTOS can be used as an **Arduino library** on AVR boards (Uno, Nano, Mega).
+Quartz RTOS can be used as an **Arduino library** on AVR boards (Uno, Nano, Mega).
 See [`extras/arduino/README.md`](extras/arduino/README.md) for full installation
 and usage instructions.
 

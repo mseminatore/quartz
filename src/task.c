@@ -284,7 +284,7 @@ static rtos_handle_t task_create_impl(rtos_tcb_t   *tcb,
     if (!tcb || !stack || !func || priority >= RTOS_MAX_PRIORITIES)
         return NULL;
 
-    // Initialise TCB fields
+    // Initialize TCB fields
     size_t len = 0;
 
     while (name && name[len] && len < RTOS_TASK_NAME_LEN - 1) {
@@ -907,10 +907,6 @@ void rtos_tick_handler(void)
     port_request_reschedule();
 }
 
-// ---------------------------------------------------------------------------
-// Scheduler start — called by vRTOSStart() after port_init()
-// ---------------------------------------------------------------------------
-
 // Exposed so the port's context switcher can read/write the current TCB pointer.
 #if RTOS_NUM_CORES > 1
 rtos_tcb_t **rtos_current_tcb_ptr(void) { return &g_current[port_core_id()]; }
@@ -949,7 +945,8 @@ void rtos_context_switch(void)
 }
 
 //---------------------------------------------------------------------------
-// Initialise the idle task and start the scheduler. Called by rtos_start().
+// Initialize the idle task and start the scheduler. Called by rtos_start()
+// after port_init().
 //---------------------------------------------------------------------------
 static void rtos_scheduler_start(void)
 {
@@ -969,7 +966,7 @@ static void rtos_scheduler_start(void)
 }
 
 //---------------------------------------------------------------------------
-// rtos_start — initialise the port and start the scheduler. Never returns.
+// rtos_start — initialize the port and start the scheduler. Never returns.
 //---------------------------------------------------------------------------
 void rtos_start(void)
 {
