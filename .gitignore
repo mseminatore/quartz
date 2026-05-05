@@ -58,3 +58,6 @@ dkms.conf
 *.dwo
 build/
 build_*/
+
+# Generated version header (stamped by CMake or package_arduino.py)
+include/rtos_version.h
