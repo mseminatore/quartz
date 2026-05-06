@@ -92,8 +92,10 @@ static void all_tasks_add(rtos_tcb_t *tcb)
 
 static void all_tasks_remove(rtos_tcb_t *tcb)
 {
-    for (size_t i = 0; i < g_all_tasks_count; i++) {
-        if (g_all_tasks[i] == tcb) {
+    for (size_t i = 0; i < g_all_tasks_count; i++) 
+    {
+        if (g_all_tasks[i] == tcb) 
+        {
             g_all_tasks[i] = g_all_tasks[--g_all_tasks_count];
             return;
         }
@@ -151,17 +153,21 @@ void ready_add(rtos_tcb_t *tcb)
     uint8_t p = tcb->priority;
 #if RTOS_NUM_CORES > 1
     uint8_t c = tcb->core;
-    if (!g_ready[c][p]) {
+    if (!g_ready[c][p]) 
+    {
         g_ready[c][p] = tcb;
-    } else {
+    } else 
+    {
         g_ready_tail[c][p]->next = tcb;
     }
     g_ready_tail[c][p] = tcb;
     g_ready_bitmap[c] |= (1u << p);
 #else
-    if (!g_ready[p]) {
+    if (!g_ready[p]) 
+    {
         g_ready[p] = tcb;
-    } else {
+    } else 
+    {
         g_ready_tail[p]->next = tcb;
     }
     g_ready_tail[p] = tcb;
@@ -224,26 +230,36 @@ void ready_remove(rtos_tcb_t *tcb)
     rtos_tcb_t **tail = &g_ready_tail[p];
 #endif
 
-    if (*head == tcb) {
+    if (*head == tcb) 
+    {
         *head = tcb->next;
-        if (!*head) {
+
+        if (!*head) 
+        {
             *tail = NULL;
 #if RTOS_NUM_CORES > 1
             g_ready_bitmap[c] &= ~(1u << p);
 #else
             g_ready_bitmap &= ~(1u << p);
 #endif
-        } else if (*tail == tcb) {
+        } else if (*tail == tcb) 
+        {
             *tail = NULL;  // shouldn't happen — head removed and head==tail handled above
         }
-    } else {
+    } else 
+    {
         rtos_tcb_t *prev = *head;
-        while (prev && prev->next != tcb) prev = prev->next;
-        if (prev) {
+        
+        while (prev && prev->next != tcb) 
+            prev = prev->next;
+
+        if (prev) 
+        {
             prev->next = tcb->next;
             if (*tail == tcb) *tail = prev;
         }
     }
+
     tcb->next = NULL;
 }
 
@@ -287,7 +303,8 @@ static rtos_handle_t task_create_impl(rtos_tcb_t   *tcb,
     // Initialize TCB fields
     size_t len = 0;
 
-    while (name && name[len] && len < RTOS_TASK_NAME_LEN - 1) {
+    while (name && name[len] && len < RTOS_TASK_NAME_LEN - 1) 
+    {
         tcb->name[len] = name[len];
         len++;
     }
@@ -329,6 +346,7 @@ static rtos_handle_t task_create_impl(rtos_tcb_t   *tcb,
     {
         uint32_t *p   = (uint32_t *)stack;
         size_t    n   = stack_words * RTOS_STACK_BYTES_PER_WORD / sizeof(uint32_t);
+
         for (size_t i = 0; i < n; i++)
             p[i] = STACK_WATERMARK_WORD;
     }
@@ -338,6 +356,7 @@ static rtos_handle_t task_create_impl(rtos_tcb_t   *tcb,
 #if RTOS_STACK_OVERFLOW_CHECK
     {
         uint32_t *p = (uint32_t *)stack;
+
         for (int i = 0; i < STACK_SENTINEL_COUNT; i++)
             p[i] = STACK_SENTINEL_WORD;
     }
@@ -406,16 +425,19 @@ rtos_handle_t rtos_task_create_on_core(rtos_tcb_t   *tcb,
 //---------------------------------------------------------------------------
 void rtos_task_delay(rtos_tick_t ticks)
 {
-    if (ticks == 0) {
+    if (ticks == 0) 
+    {
         rtos_task_yield();
         return;
     }
 
     port_enter_critical();
     ready_remove(G_CURRENT);
+
     G_CURRENT->state       = TASK_BLOCKED;
     G_CURRENT->wakeup_tick = G_TICK_COUNT + ticks;
     G_CURRENT->on_blocked  = 1;
+
     list_insert_sorted_signed(&G_BLOCKED, G_CURRENT, G_CURRENT->wakeup_tick);
     port_exit_critical();
 
@@ -448,7 +470,8 @@ void rtos_task_suspend(rtos_handle_t task)
     } else if (tcb->state == TASK_BLOCKED) 
     {
         rtos_task_blocked_remove(tcb);
-        if (tcb->ipc_wait) {
+        if (tcb->ipc_wait) 
+        {
             list_remove(tcb->ipc_wait, tcb);
             tcb->ipc_wait = NULL;
         }
@@ -499,7 +522,8 @@ void rtos_task_delete(rtos_handle_t task)
     } else if (tcb->state == TASK_BLOCKED) 
     {
         rtos_task_blocked_remove(tcb);
-        if (tcb->ipc_wait) {
+        if (tcb->ipc_wait) 
+        {
             list_remove(tcb->ipc_wait, tcb);
             tcb->ipc_wait = NULL;
         }
@@ -544,6 +568,7 @@ void rtos_task_delay_until(rtos_tick_t *last_wake_tick, rtos_tick_t period_ticks
 
     rtos_tick_t now = G_TICK_COUNT;
     int32_t remaining = (int32_t)(next - now);
+
     if (remaining > 0)
         rtos_task_delay((rtos_tick_t)remaining);
 }
@@ -562,26 +587,33 @@ void rtos_task_delay_until(rtos_tick_t *last_wake_tick, rtos_tick_t period_ticks
 //---------------------------------------------------------------------------
 static int notify_apply(rtos_tcb_t *tcb, rtos_notify_action_t action, uint32_t value)
 {
-    switch (action) {
+    switch (action) 
+    {
         case RTOS_NOTIFY_NONE:
             break;
+
         case RTOS_NOTIFY_SET_BITS:
             tcb->notif_value |= value;
             break;
+
         case RTOS_NOTIFY_INCREMENT:
             tcb->notif_value++;
             (void)value;
             break;
+
         case RTOS_NOTIFY_OVERWRITE:
             tcb->notif_value = value;
             break;
+
         case RTOS_NOTIFY_SET_NO_OVERWRITE:
             if (tcb->notif_pending) return 0;
             tcb->notif_value = value;
             break;
+
         default:
             return 0;
     }
+
     tcb->notif_pending = 1;
     return 1;
 }
@@ -600,16 +632,21 @@ int rtos_task_notify_value(rtos_handle_t task,
 
     port_enter_critical();
     int delivered = notify_apply(tcb, action, value);
-    if (delivered && tcb->state == TASK_BLOCKED) {
-        if (tcb->ipc_wait) {
+    if (delivered && tcb->state == TASK_BLOCKED) 
+    {
+        if (tcb->ipc_wait) 
+        {
             list_remove(tcb->ipc_wait, tcb);
             tcb->ipc_wait = NULL;
         }
+
         rtos_task_make_ready(tcb);
     }
+
     port_exit_critical();
 
     if (delivered) port_request_reschedule();
+
     return delivered ? RTOS_OK : RTOS_ERR;
 }
 
@@ -632,14 +669,18 @@ int rtos_task_notify_value_from_isr(rtos_handle_t task,
     int delivered = notify_apply(tcb, action, value);
     if (!delivered) return RTOS_ERR;
 
-    if (tcb->state == TASK_BLOCKED) {
-        if (tcb->ipc_wait) {
+    if (tcb->state == TASK_BLOCKED) 
+    {
+        if (tcb->ipc_wait) 
+        {
             list_remove(tcb->ipc_wait, tcb);
             tcb->ipc_wait = NULL;
         }
+
         rtos_task_make_ready(tcb);
         port_request_reschedule();
     }
+
     return RTOS_OK;
 }
 
@@ -661,7 +702,8 @@ int rtos_task_notify_wait_value(uint32_t clear_on_entry,
 
     G_CURRENT->notif_value &= ~clear_on_entry;
 
-    if (G_CURRENT->notif_pending) {
+    if (G_CURRENT->notif_pending) 
+    {
         G_CURRENT->notif_pending = 0;
         uint32_t v = G_CURRENT->notif_value;
         G_CURRENT->notif_value &= ~clear_on_exit;
@@ -670,18 +712,22 @@ int rtos_task_notify_wait_value(uint32_t clear_on_entry,
         return RTOS_OK;
     }
 
-    if (timeout_ticks == RTOS_NO_WAIT) {
+    if (timeout_ticks == RTOS_NO_WAIT) 
+    {
         port_exit_critical();
         return RTOS_TIMEOUT;
     }
 
     G_CURRENT->state = TASK_BLOCKED;
     ready_remove(G_CURRENT);
-    if (timeout_ticks != RTOS_WAIT_FOREVER) {
+
+    if (timeout_ticks != RTOS_WAIT_FOREVER) 
+    {
         G_CURRENT->wakeup_tick = G_TICK_COUNT + timeout_ticks;
         G_CURRENT->on_blocked  = 1;
         list_insert_sorted_signed(&G_BLOCKED, G_CURRENT, G_CURRENT->wakeup_tick);
     }
+    
     port_exit_critical();
 
     port_request_reschedule();
@@ -725,13 +771,16 @@ uint32_t rtos_task_stack_high_water_mark(rtos_handle_t task)
     uint32_t *p      = (uint32_t *)tcb->stack_base;
     size_t    words  = tcb->stack_words * RTOS_STACK_BYTES_PER_WORD / sizeof(uint32_t);
     uint32_t  untouched = 0;
+
     // Walk from bottom up; skip sentinel region
-    for (size_t i = STACK_SENTINEL_COUNT; i < words; i++) {
+    for (size_t i = STACK_SENTINEL_COUNT; i < words; i++) 
+    {
         if (p[i] == STACK_WATERMARK_WORD)
             untouched++;
         else
             break;
     }
+
     return untouched;
 #else
     (void)task;
@@ -753,7 +802,8 @@ size_t rtos_task_get_runtime_stats(rtos_runtime_stat_t *buf, size_t n)
         total += g_all_tasks[i]->runtime_ticks;
 
     size_t written = 0;
-    for (size_t i = 0; i < g_all_tasks_count && written < n; i++, written++) {
+    for (size_t i = 0; i < g_all_tasks_count && written < n; i++, written++) 
+    {
         buf[written].name          = g_all_tasks[i]->name;
         buf[written].runtime_ticks = g_all_tasks[i]->runtime_ticks;
         buf[written].percent       = total ? (uint8_t)((uint64_t)g_all_tasks[i]->runtime_ticks * 100 / total) : 0;
@@ -780,7 +830,8 @@ static void idle_check_all_stacks(void)
         snapshot[i] = g_all_tasks[i];
     port_exit_critical();
 
-    for (size_t i = 0; i < count; i++) {
+    for (size_t i = 0; i < count; i++) 
+    {
         uint32_t *p = (uint32_t *)snapshot[i]->stack_base;
         if (p && p[0] != STACK_SENTINEL_WORD)
             rtos_stack_overflow_hook(snapshot[i]);
@@ -791,7 +842,8 @@ static void idle_check_all_stacks(void)
 static void idle_task(void *arg)
 {
     (void)arg;
-    for (;;) {
+    for (;;) 
+    {
 #if RTOS_STACK_OVERFLOW_CHECK
         idle_check_all_stacks();
 #endif
@@ -803,7 +855,8 @@ static void idle_task(void *arg)
 #if RTOS_TICKLESS_IDLE
         {
             rtos_tick_t max = rtos_idle_next_wakeup_ticks();
-            if (max > 1) {
+            if (max > 1) 
+            {
                 rtos_tick_t elapsed = port_suppress_ticks(max);
                 if (elapsed > 0)
                     rtos_tick_advance(elapsed);
@@ -825,7 +878,8 @@ rtos_tick_t rtos_idle_next_wakeup_ticks(void)
     port_enter_critical();
     rtos_tick_t now = G_TICK_COUNT;
     rtos_tick_t task_ticks = RTOS_WAIT_FOREVER;
-    if (G_BLOCKED) {
+    if (G_BLOCKED) 
+    {
         int32_t diff = (int32_t)(G_BLOCKED->wakeup_tick - now);
         task_ticks = diff > 0 ? (rtos_tick_t)diff : 0;
     }
@@ -849,7 +903,8 @@ void rtos_tick_advance(rtos_tick_t n)
 
     // Unblock all tasks that reached their absolute wakeup tick (O(k)).
     // Signed subtraction handles uint32_t wraparound correctly.
-    while (G_BLOCKED && (int32_t)(G_TICK_COUNT - G_BLOCKED->wakeup_tick) >= 0) {
+    while (G_BLOCKED && (int32_t)(G_TICK_COUNT - G_BLOCKED->wakeup_tick) >= 0) 
+    {
         rtos_tcb_t *expired = list_pop_head(&G_BLOCKED);
         expired->on_blocked = 0;
         ready_add(expired);
@@ -887,7 +942,8 @@ void rtos_tick_handler(void)
 
     // Per-tick stack overflow check (lightweight: only tests first sentinel word)
 #if RTOS_STACK_OVERFLOW_CHECK
-    if (G_CURRENT) {
+    if (G_CURRENT) 
+    {
         uint32_t *p = (uint32_t *)G_CURRENT->stack_base;
         if (p && p[0] != STACK_SENTINEL_WORD)
             rtos_stack_overflow_hook(G_CURRENT);
@@ -922,7 +978,8 @@ rtos_tcb_t  *rtos_next_task(void)       { return scheduler_pick_next(); }
 void rtos_context_switch(void)
 {
     rtos_tcb_t *prev = G_CURRENT;
-    if (G_CURRENT && G_CURRENT->state == TASK_RUNNING) {
+    if (G_CURRENT && G_CURRENT->state == TASK_RUNNING) 
+    {
         ready_add(G_CURRENT);
     }
 
@@ -938,7 +995,8 @@ void rtos_context_switch(void)
     // noise that adds nothing to the visualization.  Note that prev's state
     // may be TASK_RUNNING (preempted, re-added to ready) or TASK_BLOCKED
     // (yielded voluntarily); either way SWITCH_OUT is the right event.
-    if (next != prev) {
+    if (next != prev) 
+    {
         if (prev) RTOS_TRACE_TASK_SWITCHED_OUT(prev);
         RTOS_TRACE_TASK_SWITCHED_IN(next);
     }
@@ -1070,14 +1128,16 @@ int rtos_task_set_priority(rtos_handle_t task, uint8_t new_priority)
     uint8_t effective = new_priority;
 #endif
 
-    if (tcb->state == TASK_READY || tcb->state == TASK_RUNNING) {
+    if (tcb->state == TASK_READY || tcb->state == TASK_RUNNING) 
+    {
         ready_remove(tcb);
         tcb->priority      = effective;
 #if RTOS_ENABLE_PRIORITY_INHERITANCE
         tcb->base_priority = new_priority;
 #endif
         ready_add(tcb);
-    } else {
+    } else 
+    {
         tcb->priority      = effective;
 #if RTOS_ENABLE_PRIORITY_INHERITANCE
         tcb->base_priority = new_priority;
