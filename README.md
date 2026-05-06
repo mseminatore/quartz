@@ -3,34 +3,29 @@
 *A small, fast, portable, real-time operating system written in C.*
 
 > The name Quartz was chosen because it suggests many of the project design 
-> goals. Specifically, Quartz crystals are known to be
-> timely, accurate, and precise. And of course rock solid.
+> goals. Specifically, Quartz crystals are accurate and precise. And rock solid.
 
-## Why Quartz RTOS
+## Why Quartz RTOS?
 
 Primarily, Quartz was started for fun and for learning. I build many small 
-projects using microcontrollers ranging from 8-bit like PIC and AVR, up to 32-bit processors like the ARM-M0+ (RPi Pico) and Xtensa L7 (ESP32-S3).
+projects using microcontrollers ranging from 8-bit PIC and AVR, up to 32-bit 
+dual-core processors like the ARM-M0+ (RPi Pico) and Xtensa L7 (ESP32-S3).
 
 Programming small projects to bare metal is fun and usually adequate. However, 
-there are times when the the support of a minimal operating system can be 
-useful. Modern microcontrollers including AVR can efficently support
-pre-emptive multi-tasking.
+there are times when the the support of a minimal operating system is desirable. 
 
-I started by evaluating FreeRTOS and Zephyr. Both are highly capable, well 
-supported and mature. Still, they both seemed like more than I really needed. 
+I evaluated FreeRTOS and Zephyr first. Both are highly capable, well 
+supported and mature. But they seemed larger than I needed for small projects. 
 Having previously written a multi-tasking kernel in assembly language as part of the 
-[bintools](https://github.com/mseminatore/bintools) project I decided to create
-my own.
+[bintools](https://github.com/mseminatore/bintools) project I decided attempt to 
+create my own.
 
-New ports may be added as needed. The most likely next candidate is the RP2350 
-(ARM Cortex-M33) for the Raspberry Pi PICO 2. If there is a processor you'd like
-supported, let us know, and please consider contributing.
-
-**Design goals:**
-- Preemptive, priority-based scheduling (round-robin within equal priorities)
+**Quartz Design goals:**
+- Low-latency preemptive, priority-based scheduling (round-robin within equal priorities)
+- Lean, mean and configurable
 - Static memory allocation only — no `malloc`, no kernel allocations or surprises
-- Easily portable — architecture-specific code isolated in `port/<arch>/`
-- Host-testable kernel logic (unit tests run on the development machine)
+- Easily portable — keep architecture-specific code isolated in `port/<arch>/`
+- Host-testable kernel logic (unit tests can run on the development machine)
 - O(k) tick handler — only examines the *k* tasks expiring on the current tick, not all blocked tasks
 - Priority-inheritance mutex — prevents unbounded priority inversion (single-level boost)
 
@@ -41,6 +36,13 @@ supported, let us know, and please consider contributing.
 - AVR ATmega328P (Arduino Uno/Nano)
 - RISC-V RV32IMAC (QEMU virt / SiFive FE310)
 - ESP32-S3 (Xtensa LX7, Espressif QEMU)
+
+**Future targets**
+
+The most likely next candidate for the next port is the RP2350 
+(ARM Cortex-M33) for the Raspberry Pi PICO 2.
+
+> If there is a processor you'd like supported, let me know, and please consider contributing.
 
 ## Build Status
 
