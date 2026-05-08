@@ -144,6 +144,11 @@ DEFINE_OBJ_HOOK(rtos_trace_mutex_unlock,  RTOS_TRACE_EV_MUTEX_UNLOCK)
 DEFINE_OBJ_HOOK(rtos_trace_queue_send,    RTOS_TRACE_EV_QUEUE_SEND)
 DEFINE_OBJ_HOOK(rtos_trace_queue_receive, RTOS_TRACE_EV_QUEUE_RECEIVE)
 
+#if RTOS_ENABLE_EVENT_GROUPS
+DEFINE_OBJ_HOOK(rtos_trace_eg_set,        RTOS_TRACE_EV_EG_SET)
+DEFINE_OBJ_HOOK(rtos_trace_eg_wait,       RTOS_TRACE_EV_EG_WAIT)
+#endif
+
 void rtos_trace_timer_fire(void *handle)
 {
     port_enter_critical();

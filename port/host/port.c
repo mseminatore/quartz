@@ -22,6 +22,7 @@
 #include <ucontext.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include "../../include/rtos_task.h"
@@ -131,6 +132,11 @@ void port_request_reschedule(void)
     rtos_tick_handler();             // count++, unblock delayed tasks, fire timers
     g_delivering_tick = 0;
 
+#if RTOS_HOST_STOP_AFTER_TICKS
+    if (rtos_task_tick_count() >= (rtos_tick_t)RTOS_HOST_STOP_AFTER_TICKS)
+        exit(0);
+#endif
+
     // Select the next task and yield to the scheduler
     rtos_context_switch();
     swapcontext(my_ctx, &g_sched_ctx);
@@ -174,9 +180,21 @@ void port_start_first_task(void)
 // ---------------------------------------------------------------------------
 // port_cpu_idle — no-op on the host; tick advancement happens inside
 // port_request_reschedule (which is called immediately after in the idle loop).
+//
+// When RTOS_HOST_STOP_AFTER_TICKS is set to a nonzero value the process
+// exits cleanly once the tick count reaches that limit.  Used by the ctest
+// smoke targets so that infinite-loop samples can be run as automated tests.
 // ---------------------------------------------------------------------------
 
-void port_cpu_idle(void) { }
+extern rtos_tick_t rtos_task_tick_count(void);
+
+void port_cpu_idle(void)
+{
+#if RTOS_HOST_STOP_AFTER_TICKS
+    if (rtos_task_tick_count() >= (rtos_tick_t)RTOS_HOST_STOP_AFTER_TICKS)
+        exit(0);
+#endif
+}
 
 // ---------------------------------------------------------------------------
 // port_core_id — single-threaded simulation, always core 0.

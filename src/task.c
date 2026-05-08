@@ -134,6 +134,10 @@ RTOS_WEAK void rtos_trace_task_switched_in(rtos_tcb_t *t)  { (void)t; }
 RTOS_WEAK void rtos_trace_task_switched_out(rtos_tcb_t *t) { (void)t; }
 RTOS_WEAK void rtos_trace_task_create(rtos_tcb_t *t)       { (void)t; }
 RTOS_WEAK void rtos_trace_task_delete(rtos_tcb_t *t)       { (void)t; }
+#   if RTOS_ENABLE_EVENT_GROUPS
+RTOS_WEAK void rtos_trace_eg_set(void *h, uint32_t a1, uint32_t a2)  { (void)h; (void)a1; (void)a2; }
+RTOS_WEAK void rtos_trace_eg_wait(void *h, uint32_t a1, uint32_t a2) { (void)h; (void)a1; (void)a2; }
+#   endif
 #endif
 
 //[]---------------------------------------------------------------------------[]

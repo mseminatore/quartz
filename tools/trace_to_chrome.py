@@ -26,6 +26,8 @@ EV_MUTEX_UNLOCK    = 8
 EV_QUEUE_SEND      = 9
 EV_QUEUE_RECEIVE   = 10
 EV_TIMER_FIRE      = 11
+EV_EG_SET          = 12
+EV_EG_WAIT         = 13
 
 EVENT_NAMES = {
     EV_TASK_SWITCH_IN:  "switch_in",
@@ -39,6 +41,8 @@ EVENT_NAMES = {
     EV_QUEUE_SEND:      "queue_send",
     EV_QUEUE_RECEIVE:   "queue_recv",
     EV_TIMER_FIRE:      "timer_fire",
+    EV_EG_SET:          "eg_set",
+    EV_EG_WAIT:         "eg_wait",
 }
 
 
@@ -115,6 +119,8 @@ IPC_CNAME = {
     EV_QUEUE_SEND:    "rail_response",   # lavender
     EV_QUEUE_RECEIVE: "rail_animation",  # orange
     EV_TIMER_FIRE:    "white",
+    EV_EG_SET:        "cq_build_passed", # cyan
+    EV_EG_WAIT:       "cq_build_attempt_runnning",  # light blue
 }
 
 # Per-event-type labels for the (aux1, aux2) record fields.  See trace_chrome.c
@@ -126,6 +132,8 @@ AUX_LABELS = {
     EV_MUTEX_UNLOCK:  ("nest_count", "woke_waiter"),
     EV_QUEUE_SEND:    ("count", "woke_receiver"),
     EV_QUEUE_RECEIVE: ("count", "woke_sender"),
+    EV_EG_SET:        ("bits_set", "tasks_woken"),
+    EV_EG_WAIT:       ("bits_satisfied", "timed_out"),
 }
 
 

@@ -38,6 +38,8 @@ enum {
     RTOS_TRACE_EV_QUEUE_SEND      = 9,
     RTOS_TRACE_EV_QUEUE_RECEIVE   = 10,
     RTOS_TRACE_EV_TIMER_FIRE      = 11,
+    RTOS_TRACE_EV_EG_SET          = 12,
+    RTOS_TRACE_EV_EG_WAIT         = 13,
 };
 
 // 16-byte fixed record.  Little-endian on every supported port.
