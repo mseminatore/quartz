@@ -85,6 +85,7 @@ Edit `include/rtos_config.h` (or define before including `rtos.h`):
 | `RTOS_MAX_PRIORITIES` | 8 | Number of priority levels (0 = highest) |
 | `RTOS_TICK_RATE_HZ` | 1000 | SysTick / timer interrupt frequency |
 | `RTOS_MAX_TIMERS` | 8 | Maximum software timers |
+| `RTOS_ENABLE_EVENT_GROUPS` | 1 | Include event group kernel object; set to `0` to remove all event group code and the ≈12 B per-TCB overhead |
 | `RTOS_TASK_NAME_LEN` | 16 | Task/timer name buffer size |
 | `RTOS_IDLE_STACK_WORDS` | 64 | Idle stack size in `RTOS_STACK_BYTES_PER_WORD` units (256 B on 32-bit) |
 | `RTOS_STACK_BYTES_PER_WORD` | 4 | Bytes per stack unit — set to `1` on AVR |
@@ -309,6 +310,54 @@ is supported.
 
 Software timers use an **O(k)** sorted-list approach: the active timer list is kept sorted
 by absolute expiry tick so the tick handler only inspects the head, not all timers.
+
+---
+
+### Event groups
+
+An event group holds 32 independent binary flags in a single kernel object.  Tasks can set or
+clear individual bits and block until **any** or **all** bits in a mask are set, with optional
+auto-clear on wake.  Multiple tasks can block on the same event group simultaneously and are
+unblocked in priority order.
+
+```c
+static rtos_eventgroup_t g_events;
+rtos_handle_t h = rtos_eventgroup_create(&g_events);
+
+// Set bits — task and ISR variants
+rtos_eventgroup_set(h, 0x01);               // task context only
+rtos_eventgroup_set_from_isr(h, 0x01);      // ISR-safe; triggers reschedule internally
+
+// Clear bits and read current state (both are task- and ISR-safe)
+rtos_eventgroup_clear(h, 0x01);
+uint32_t bits = rtos_eventgroup_get(h);
+
+// Block until all bits in the mask are set; auto-clear the mask bits on wake
+uint32_t got = rtos_eventgroup_wait(h,
+    /*wait_mask=*/  0x03,
+    /*wait_all=*/   RTOS_EG_WAIT_ALL,   // or RTOS_EG_WAIT_ANY
+    /*clear_on_exit=*/ 1,               // 0 = leave bits set after wake
+    /*timeout_ticks=*/ RTOS_WAIT_FOREVER);
+// got == 0 on timeout; otherwise the snapshot of bits that satisfied the condition
+```
+
+**Wait modes:**
+| Constant | Meaning |
+|---|---|
+| `RTOS_EG_WAIT_ANY` | Unblock when *at least one* bit in `wait_mask` is set |
+| `RTOS_EG_WAIT_ALL` | Unblock only when *all* bits in `wait_mask` are simultaneously set |
+
+**`clear_on_exit`:** when non-zero, the bits that satisfied the wait condition are cleared
+in the event group atomically as the calling task wakes.  Other bits are unaffected.
+With `RTOS_EG_WAIT_ANY` each waking task clears its own `wait_mask`; with `RTOS_EG_WAIT_ALL`
+the full `wait_mask` is cleared once.
+
+**ISR safety:** `rtos_eventgroup_set_from_isr()` and `rtos_eventgroup_clear()` /
+`rtos_eventgroup_get()` are safe to call from interrupt context.
+`rtos_eventgroup_wait()` must only be called from task context.
+
+Set `RTOS_ENABLE_EVENT_GROUPS=0` to compile out all event group code and remove the ≈12 byte
+per-TCB overhead.
 
 ---
 
@@ -727,6 +776,7 @@ with real GPIO/UART/ADC calls via `#ifdef __rp2040__`.
 | `sample_blink` | Single task, `rtos_task_delay_until` for drift-free 500 ms LED blink |
 | `sample_producer_consumer` | Queue: producer sends integers, consumer prints them |
 | `sample_mutex_shared_resource` | Mutex: two tasks increment a shared counter safely |
+| `sample_event_group_demo` | Event groups: sensor + comms tasks set bits; process task waits `WAIT_ALL` with auto-clear |
 | `sample_uart_echo` | ISR → task decoupling: UART RX ISR fills ring buffer, notifies task via `rtos_task_notify_from_isr` |
 | `sample_adc_pipeline` | Sampling pipeline: 100 Hz sampler (`rtos_task_delay_until`) → queue → rolling-average monitor task |
 
@@ -735,6 +785,7 @@ cmake -B build && cmake --build build
 ./build/sample_blink
 ./build/sample_producer_consumer
 ./build/sample_mutex_shared_resource
+./build/sample_event_group_demo    # sensor + comms set bits; process task waits for both
 ./build/sample_uart_echo          # type characters; press Enter to see a line echoed
 ./build/sample_adc_pipeline       # prints simulated temperature readings every second
 ```
