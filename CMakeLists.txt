@@ -283,7 +283,7 @@ if(NOT RTOS_TARGET_PICO AND NOT RTOS_TARGET_CM0PLUS AND NOT RTOS_TARGET_AVR AND 
     # Sample programs (host simulation — hardware calls are stubbed inside each file)
     # ---------------------------------------------------------------------------
 
-    foreach(sample blink producer_consumer mutex_shared_resource uart_echo adc_pipeline)
+    foreach(sample blink producer_consumer mutex_shared_resource uart_echo adc_pipeline timer_demo runtime_stats)
         add_executable(sample_${sample} samples/${sample}.c
                        ${RTOS_KERNEL_SOURCES}
                        port/host/port.c)
@@ -295,6 +295,9 @@ if(NOT RTOS_TARGET_PICO AND NOT RTOS_TARGET_CM0PLUS AND NOT RTOS_TARGET_AVR AND 
         endif()
         if(sample STREQUAL "adc_pipeline")
             target_link_libraries(sample_${sample} m)  # sinf for host stub
+        endif()
+        if(sample STREQUAL "runtime_stats")
+            target_compile_definitions(sample_${sample} PRIVATE RTOS_ENABLE_RUNTIME_STATS=1)
         endif()
     endforeach()
 
@@ -335,6 +338,55 @@ if(RTOS_TARGET_PICO)
         pico_enable_stdio_usb(sample_${sample} 1)
         pico_enable_stdio_uart(sample_${sample} 0)
     endforeach()
+
+    # timer_demo — software timer demo; no special hardware required
+    add_executable(sample_timer_demo samples/timer_demo.c)
+    target_link_libraries(sample_timer_demo quartz pico_stdlib)
+    target_include_directories(sample_timer_demo PRIVATE include)
+    pico_add_extra_outputs(sample_timer_demo)
+    pico_enable_stdio_usb(sample_timer_demo 1)
+    pico_enable_stdio_uart(sample_timer_demo 0)
+
+    # runtime_stats — compiles the kernel directly so RTOS_ENABLE_RUNTIME_STATS=1
+    # can be applied to all kernel sources without rebuilding the shared library.
+    add_executable(sample_runtime_stats
+                   samples/runtime_stats.c
+                   ${RTOS_KERNEL_SOURCES}
+                   port/arm_cm0plus/port.c
+                   port/arm_cm0plus/port_asm.S)
+    target_link_libraries(sample_runtime_stats pico_stdlib)
+    target_include_directories(sample_runtime_stats PRIVATE include src)
+    target_compile_definitions(sample_runtime_stats PRIVATE
+        RTOS_ENABLE_RUNTIME_STATS=1
+        RTOS_CPU_HZ=${RTOS_CPU_HZ})
+    pico_add_extra_outputs(sample_runtime_stats)
+    pico_enable_stdio_usb(sample_runtime_stats 1)
+    pico_enable_stdio_uart(sample_runtime_stats 0)
+
+    # dual_core — RP2040 dual-core AMP demo.  Compiles the kernel directly so
+    # RTOS_NUM_CORES=2 can be applied to all kernel sources independently.
+    add_executable(sample_dual_core
+                   samples/dual_core.c
+                   ${RTOS_KERNEL_SOURCES}
+                   port/arm_cm0plus/port.c
+                   port/arm_cm0plus/port_asm.S)
+    target_link_libraries(sample_dual_core pico_stdlib pico_multicore)
+    target_include_directories(sample_dual_core PRIVATE include src)
+    target_compile_definitions(sample_dual_core PRIVATE
+        RTOS_NUM_CORES=2
+        RTOS_CPU_HZ=${RTOS_CPU_HZ})
+    pico_add_extra_outputs(sample_dual_core)
+    pico_enable_stdio_usb(sample_dual_core 1)
+    pico_enable_stdio_uart(sample_dual_core 0)
+
+    # pwm_fade — PWM LED fade with task suspend/resume; standard Pico only
+    # (GP25 is the on-board LED on Pico; on Pico W it is wired to the CYW43).
+    add_executable(sample_pwm_fade samples/pwm_fade.c)
+    target_link_libraries(sample_pwm_fade quartz pico_stdlib hardware_pwm)
+    target_include_directories(sample_pwm_fade PRIVATE include)
+    pico_add_extra_outputs(sample_pwm_fade)
+    pico_enable_stdio_usb(sample_pwm_fade 1)
+    pico_enable_stdio_uart(sample_pwm_fade 0)
 
     # wifi_http — Pico W only (requires CYW43 WiFi chip)
     if(PICO_BOARD STREQUAL "pico_w")
