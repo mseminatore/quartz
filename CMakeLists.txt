@@ -326,55 +326,52 @@ if(NOT RTOS_TARGET_PICO AND NOT RTOS_TARGET_CM0PLUS AND NOT RTOS_TARGET_AVR AND 
     # Each is compiled with RTOS_HOST_STOP_AFTER_TICKS so port_cpu_idle() calls
     # exit(0) once the tick limit is reached.  PASS_REGULAR_EXPRESSION verifies
     # that the sample produced the expected output before stopping.
+    # Excluded on MSVC: port/host/port.c uses POSIX ucontext (unavailable on Windows).
     # ---------------------------------------------------------------------------
-    set(SMOKE_TICKS_DEFAULT 700)
+    if(NOT MSVC)
+        set(SMOKE_TICKS_DEFAULT 700)
 
-    foreach(sample blink producer_consumer event_group_demo)
-        add_executable(smoke_${sample} samples/${sample}.c
+        foreach(sample blink producer_consumer event_group_demo)
+            add_executable(smoke_${sample} samples/${sample}.c
+                           ${RTOS_KERNEL_SOURCES}
+                           port/host/port.c)
+            target_include_directories(smoke_${sample} PRIVATE include src)
+            target_compile_definitions(smoke_${sample} PRIVATE
+                RTOS_HOST_STOP_AFTER_TICKS=${SMOKE_TICKS_DEFAULT})
+            target_compile_options(smoke_${sample} PRIVATE -fno-builtin)
+            add_test(NAME smoke_${sample} COMMAND smoke_${sample})
+            set_tests_properties(smoke_${sample} PROPERTIES TIMEOUT 30)
+        endforeach()
+
+        # timer_demo prints every 1000 ticks — needs a higher limit
+        add_executable(smoke_timer_demo samples/timer_demo.c
                        ${RTOS_KERNEL_SOURCES}
                        port/host/port.c)
-        target_include_directories(smoke_${sample} PRIVATE include src)
-        target_compile_definitions(smoke_${sample} PRIVATE
-            RTOS_HOST_STOP_AFTER_TICKS=${SMOKE_TICKS_DEFAULT})
-        if(NOT MSVC)
-            target_compile_options(smoke_${sample} PRIVATE -fno-builtin)
-        endif()
-        add_test(NAME smoke_${sample} COMMAND smoke_${sample})
-        set_tests_properties(smoke_${sample} PROPERTIES TIMEOUT 30)
-    endforeach()
-
-    # timer_demo prints every 1000 ticks — needs a higher limit
-    add_executable(smoke_timer_demo samples/timer_demo.c
-                   ${RTOS_KERNEL_SOURCES}
-                   port/host/port.c)
-    target_include_directories(smoke_timer_demo PRIVATE include src)
-    target_compile_definitions(smoke_timer_demo PRIVATE
-        RTOS_HOST_STOP_AFTER_TICKS=1200)
-    if(NOT MSVC)
+        target_include_directories(smoke_timer_demo PRIVATE include src)
+        target_compile_definitions(smoke_timer_demo PRIVATE
+            RTOS_HOST_STOP_AFTER_TICKS=1200)
         target_compile_options(smoke_timer_demo PRIVATE -fno-builtin)
-    endif()
-    add_test(NAME smoke_timer_demo COMMAND smoke_timer_demo)
-    set_tests_properties(smoke_timer_demo PROPERTIES TIMEOUT 30)
+        add_test(NAME smoke_timer_demo COMMAND smoke_timer_demo)
+        set_tests_properties(smoke_timer_demo PROPERTIES TIMEOUT 30)
 
-    # runtime_stats prints every 5000 ticks so needs a higher limit
-    add_executable(smoke_runtime_stats samples/runtime_stats.c
-                   ${RTOS_KERNEL_SOURCES}
-                   port/host/port.c)
-    target_include_directories(smoke_runtime_stats PRIVATE include src)
-    target_compile_definitions(smoke_runtime_stats PRIVATE
-        RTOS_ENABLE_RUNTIME_STATS=1
-        RTOS_HOST_STOP_AFTER_TICKS=5500)
-    if(NOT MSVC)
+        # runtime_stats prints every 5000 ticks so needs a higher limit
+        add_executable(smoke_runtime_stats samples/runtime_stats.c
+                       ${RTOS_KERNEL_SOURCES}
+                       port/host/port.c)
+        target_include_directories(smoke_runtime_stats PRIVATE include src)
+        target_compile_definitions(smoke_runtime_stats PRIVATE
+            RTOS_ENABLE_RUNTIME_STATS=1
+            RTOS_HOST_STOP_AFTER_TICKS=5500)
         target_compile_options(smoke_runtime_stats PRIVATE -fno-builtin)
-    endif()
-    add_test(NAME smoke_runtime_stats COMMAND smoke_runtime_stats)
-    set_tests_properties(smoke_runtime_stats PROPERTIES TIMEOUT 60)
+        add_test(NAME smoke_runtime_stats COMMAND smoke_runtime_stats)
+        set_tests_properties(smoke_runtime_stats PROPERTIES TIMEOUT 60)
 
-    set_tests_properties(smoke_blink             PROPERTIES PASS_REGULAR_EXPRESSION "LED")
-    set_tests_properties(smoke_producer_consumer PROPERTIES PASS_REGULAR_EXPRESSION "received:")
-    set_tests_properties(smoke_timer_demo        PROPERTIES PASS_REGULAR_EXPRESSION "\\[timer\\]")
-    set_tests_properties(smoke_event_group_demo  PROPERTIES PASS_REGULAR_EXPRESSION "sensor ready|processing!")
-    set_tests_properties(smoke_runtime_stats     PROPERTIES PASS_REGULAR_EXPRESSION "CPU%|Task")
+        set_tests_properties(smoke_blink             PROPERTIES PASS_REGULAR_EXPRESSION "LED")
+        set_tests_properties(smoke_producer_consumer PROPERTIES PASS_REGULAR_EXPRESSION "received:")
+        set_tests_properties(smoke_timer_demo        PROPERTIES PASS_REGULAR_EXPRESSION "\\[timer\\]")
+        set_tests_properties(smoke_event_group_demo  PROPERTIES PASS_REGULAR_EXPRESSION "sensor ready|processing!")
+        set_tests_properties(smoke_runtime_stats     PROPERTIES PASS_REGULAR_EXPRESSION "CPU%|Task")
+    endif() # NOT MSVC
 
 endif()
 
