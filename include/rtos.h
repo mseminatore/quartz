@@ -13,6 +13,7 @@
 #include "rtos_mutex.h"
 #include "rtos_queue.h"
 #include "rtos_timer.h"
+#include "rtos_eventgroup.h"
 
 #ifdef __cplusplus
 extern "C" {

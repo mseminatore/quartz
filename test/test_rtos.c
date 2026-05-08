@@ -41,6 +41,7 @@ void *port_init_stack(void     *stack_top,
 #include "../src/mutex.c"
 #include "../src/queue.c"
 #include "../src/timer.c"
+#include "../src/eventgroup.c"
 
 // Pull the chrome trace recorder into the test binary so we can unit-test
 // its ring buffer + serialization independently of the kernel build flags.
@@ -2382,10 +2383,349 @@ static void test_task_handle_self(void)
 // Main
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Event group tests
+// ---------------------------------------------------------------------------
+#if RTOS_ENABLE_EVENT_GROUPS
+
+static void test_eventgroup_basics(void)
+{
+    SUITE("event group create / get / clear");
+
+    static rtos_eventgroup_t eg;
+    rtos_handle_t h = rtos_eventgroup_create(&eg);
+    TEST(h != NULL);
+    TEST(eg.bits == 0);
+    TEST(rtos_eventgroup_get(h) == 0);
+
+    // NULL create returns NULL
+    TEST(rtos_eventgroup_create(NULL) == NULL);
+
+    // get on NULL returns 0
+    TEST(rtos_eventgroup_get(NULL) == 0);
+}
+
+static void test_eventgroup_set_get(void)
+{
+    SUITE("event group set / get");
+
+    static rtos_eventgroup_t eg;
+    rtos_handle_t h = rtos_eventgroup_create(&eg);
+
+    // Set bits; verify get matches
+    uint32_t ret = rtos_eventgroup_set(h, 0x05);
+    TEST(ret == 0x05);
+    TEST(rtos_eventgroup_get(h) == 0x05);
+
+    // Set additional bits; prior bits preserved
+    rtos_eventgroup_set(h, 0x02);
+    TEST(rtos_eventgroup_get(h) == 0x07);
+
+    // Set with zero is a no-op
+    rtos_eventgroup_set(h, 0);
+    TEST(rtos_eventgroup_get(h) == 0x07);
+}
+
+static void test_eventgroup_clear(void)
+{
+    SUITE("event group clear");
+
+    static rtos_eventgroup_t eg;
+    rtos_handle_t h = rtos_eventgroup_create(&eg);
+
+    rtos_eventgroup_set(h, 0xFF);
+    TEST(rtos_eventgroup_get(h) == 0xFF);
+
+    // clear returns old value
+    uint32_t before = rtos_eventgroup_clear(h, 0x0F);
+    TEST(before == 0xFF);
+    TEST(rtos_eventgroup_get(h) == 0xF0);
+
+    // clear on NULL returns 0
+    TEST(rtos_eventgroup_clear(NULL, 0xFF) == 0);
+}
+
+static void test_eventgroup_wait_no_block(void)
+{
+    SUITE("event group wait (RTOS_NO_WAIT paths)");
+
+    static rtos_eventgroup_t eg;
+    rtos_handle_t h = rtos_eventgroup_create(&eg);
+
+    rtos_eventgroup_set(h, 0x03);
+
+    // ANY mode — one matching bit is enough; result = intersection of mask & bits
+    uint32_t ret = rtos_eventgroup_wait(h, 0x01, RTOS_EG_WAIT_ANY, 0, RTOS_NO_WAIT);
+    TEST(ret == 0x01);
+    TEST(rtos_eventgroup_get(h) == 0x03);   // bits unchanged (clear_on_exit=0)
+
+    // ANY mode — multiple matching bits → result is the full intersection
+    ret = rtos_eventgroup_wait(h, 0x07, RTOS_EG_WAIT_ANY, 0, RTOS_NO_WAIT);
+    TEST(ret == 0x03);   // 0x07 & 0x03
+
+    // ALL mode — all bits present
+    ret = rtos_eventgroup_wait(h, 0x03, RTOS_EG_WAIT_ALL, 0, RTOS_NO_WAIT);
+    TEST(ret == 0x03);
+
+    // ALL mode — missing a bit → returns 0
+    ret = rtos_eventgroup_wait(h, 0x07, RTOS_EG_WAIT_ALL, 0, RTOS_NO_WAIT);
+    TEST(ret == 0);
+    TEST(rtos_eventgroup_get(h) == 0x03);   // bits untouched
+
+    // ANY mode — no matching bits → returns 0
+    ret = rtos_eventgroup_wait(h, 0x08, RTOS_EG_WAIT_ANY, 0, RTOS_NO_WAIT);
+    TEST(ret == 0);
+}
+
+static void test_eventgroup_clear_on_exit(void)
+{
+    SUITE("event group clear_on_exit");
+
+    static rtos_eventgroup_t eg;
+    rtos_handle_t h = rtos_eventgroup_create(&eg);
+
+    rtos_eventgroup_set(h, 0x0F);
+    TEST(rtos_eventgroup_get(h) == 0x0F);
+
+    // clear_on_exit=1: wait_mask bits are cleared after successful wait
+    uint32_t ret = rtos_eventgroup_wait(h, 0x05, RTOS_EG_WAIT_ANY, 1, RTOS_NO_WAIT);
+    TEST(ret == 0x05);
+    TEST(rtos_eventgroup_get(h) == 0x0A);   // 0x05 cleared; 0x0A remains
+
+    // clear_on_exit=0: bits remain
+    ret = rtos_eventgroup_wait(h, 0x02, RTOS_EG_WAIT_ANY, 0, RTOS_NO_WAIT);
+    TEST(ret == 0x02);
+    TEST(rtos_eventgroup_get(h) == 0x0A);
+}
+
+static void test_eventgroup_set_wakes_any(void)
+{
+    SUITE("event group set wakes ANY-mode blocked task");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_eventgroup_t eg;
+    rtos_handle_t h = rtos_eventgroup_create(&eg);
+
+    static rtos_tcb_t   ta, tb;
+    static rtos_stack_t sa[64], sb[64];
+    rtos_task_create(&ta, sa, 64, (void(*)(void*))1, NULL, "waiter", 1);
+    rtos_task_create(&tb, sb, 64, (void(*)(void*))1, NULL, "setter", 0);
+
+    // Block ta on the event group (simulates what rtos_eventgroup_wait does)
+    g_current = &ta;
+    ta.state         = TASK_BLOCKED;
+    ta.eg_wait_mask  = 0x03;
+    ta.eg_clear_mask = 0;
+    ta.eg_wait_mode  = RTOS_EG_WAIT_ANY;
+    ta.ipc_wait      = &eg.wait_list;
+    list_insert_sorted(&eg.wait_list, &ta, ta.priority);
+
+    TEST(eg.wait_list == &ta);
+    TEST(ta.state == TASK_BLOCKED);
+
+    // Switch to setter; set bit 0x01 — satisfies ANY 0x03
+    g_current = &tb;
+    tb.state = TASK_RUNNING;
+    rtos_eventgroup_set(h, 0x01);
+
+    TEST(ta.state == TASK_READY);
+    TEST(ta.eg_wait_mask == 0x01);   // result = 0x03 & set_bits
+    TEST(eg.wait_list == NULL);
+    TEST(rtos_eventgroup_get(h) == 0x01);   // not cleared (eg_clear_mask=0)
+
+    g_current = NULL;
+    g_blocked = NULL;
+    g_tick_count = 0;
+}
+
+static void test_eventgroup_set_wakes_all(void)
+{
+    SUITE("event group set wakes ALL-mode blocked task");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_eventgroup_t eg;
+    rtos_handle_t h = rtos_eventgroup_create(&eg);
+
+    static rtos_tcb_t   ta, tb;
+    static rtos_stack_t sa[64], sb[64];
+    rtos_task_create(&ta, sa, 64, (void(*)(void*))1, NULL, "waiter", 1);
+    rtos_task_create(&tb, sb, 64, (void(*)(void*))1, NULL, "setter", 0);
+
+    // ta waits for ALL of bits 0x03
+    ta.state = TASK_BLOCKED; ta.eg_wait_mask = 0x03;
+    ta.eg_clear_mask = 0x03; ta.eg_wait_mode = RTOS_EG_WAIT_ALL;
+    ta.ipc_wait = &eg.wait_list;
+    list_insert_sorted(&eg.wait_list, &ta, ta.priority);
+
+    g_current = &tb;
+    tb.state = TASK_RUNNING;
+
+    // Set only bit 0x01 — ALL not yet satisfied
+    rtos_eventgroup_set(h, 0x01);
+    TEST(ta.state == TASK_BLOCKED);
+    TEST(eg.wait_list == &ta);
+
+    // Set bit 0x02 — now ALL satisfied
+    rtos_eventgroup_set(h, 0x02);
+    TEST(ta.state == TASK_READY);
+    TEST(ta.eg_wait_mask == 0x03);    // result = 0x03 (both bits)
+    TEST(rtos_eventgroup_get(h) == 0); // clear_on_exit cleared 0x03
+
+    g_current = NULL;
+    g_blocked = NULL;
+    g_tick_count = 0;
+}
+
+static void test_eventgroup_timeout(void)
+{
+    SUITE("event group wait timeout (tick handler clears g_blocked)");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_eventgroup_t eg;
+    rtos_eventgroup_create(&eg);
+
+    static rtos_tcb_t   ta;
+    static rtos_stack_t sa[64];
+    rtos_task_create(&ta, sa, 64, (void(*)(void*))1, NULL, "waiter", 1);
+
+    // Block ta on the event group with a timeout
+    g_current = &ta;
+    ta.state = TASK_BLOCKED; ta.eg_wait_mask = 0xFF;
+    ta.eg_clear_mask = 0; ta.eg_wait_mode = RTOS_EG_WAIT_ANY;
+    ta.ipc_wait = &eg.wait_list;
+    list_insert_sorted(&eg.wait_list, &ta, ta.priority);
+    rtos_task_blocked_add(&ta, 5);
+
+    TEST(ta.on_blocked == 1);
+    TEST(eg.wait_list == &ta);
+
+    // Tick handler fires at tick 5: removes from g_blocked, makes TASK_READY.
+    // Task is still on eg.wait_list — the wait() post-resume cleanup handles that.
+    rtos_tick_advance(5);
+    TEST(ta.on_blocked == 0);
+    TEST(ta.state == TASK_READY);
+
+    // Confirm the timeout path: task is still on eg.wait_list → wait() returns 0
+    int still_on_list = list_remove(&eg.wait_list, &ta);
+    TEST(still_on_list == 1);
+
+    g_current = NULL;
+    g_blocked = NULL;
+    g_tick_count = 0;
+}
+
+static void test_eventgroup_multi_waiter(void)
+{
+    SUITE("event group multiple waiters + batched clear_on_exit");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_eventgroup_t eg;
+    rtos_handle_t h = rtos_eventgroup_create(&eg);
+
+    static rtos_tcb_t   ta, tb, tc;
+    static rtos_stack_t sa[64], sb[64], sc[64];
+    rtos_task_create(&ta, sa, 64, (void(*)(void*))1, NULL, "a", 0); // highest
+    rtos_task_create(&tb, sb, 64, (void(*)(void*))1, NULL, "b", 1);
+    rtos_task_create(&tc, sc, 64, (void(*)(void*))1, NULL, "c", 2);
+
+    // ta: wait for bit 0x01, ANY, clear_on_exit
+    ta.state = TASK_BLOCKED; ta.eg_wait_mask = 0x01;
+    ta.eg_clear_mask = 0x01; ta.eg_wait_mode = RTOS_EG_WAIT_ANY;
+    ta.ipc_wait = &eg.wait_list;
+    list_insert_sorted(&eg.wait_list, &ta, ta.priority);
+
+    // tb: wait for bit 0x02, ANY, clear_on_exit
+    tb.state = TASK_BLOCKED; tb.eg_wait_mask = 0x02;
+    tb.eg_clear_mask = 0x02; tb.eg_wait_mode = RTOS_EG_WAIT_ANY;
+    tb.ipc_wait = &eg.wait_list;
+    list_insert_sorted(&eg.wait_list, &tb, tb.priority);
+
+    // tc: wait for bit 0x04, ANY, no clear
+    tc.state = TASK_BLOCKED; tc.eg_wait_mask = 0x04;
+    tc.eg_clear_mask = 0; tc.eg_wait_mode = RTOS_EG_WAIT_ANY;
+    tc.ipc_wait = &eg.wait_list;
+    list_insert_sorted(&eg.wait_list, &tc, tc.priority);
+
+    // Setter task
+    static rtos_tcb_t   td;
+    static rtos_stack_t sd[64];
+    rtos_task_create(&td, sd, 64, (void(*)(void*))1, NULL, "setter", 3);
+    g_current = &td;
+    td.state = TASK_RUNNING;
+
+    // Set all three bits at once
+    rtos_eventgroup_set(h, 0x07);
+
+    TEST(ta.state == TASK_READY);
+    TEST(tb.state == TASK_READY);
+    TEST(tc.state == TASK_READY);
+
+    TEST(ta.eg_wait_mask == 0x01);   // result: 0x07 & 0x01
+    TEST(tb.eg_wait_mask == 0x02);   // result: 0x07 & 0x02
+    TEST(tc.eg_wait_mask == 0x04);   // result: 0x07 & 0x04
+
+    // Batched clear: accumulated_clr = 0x01|0x02 = 0x03; 0x04 not cleared
+    // Remaining: 0x07 & ~0x03 = 0x04
+    TEST(rtos_eventgroup_get(h) == 0x04);
+
+    g_current = NULL;
+    g_blocked = NULL;
+    g_tick_count = 0;
+}
+
+static void test_eventgroup_set_from_isr(void)
+{
+    SUITE("event group set_from_isr");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_eventgroup_t eg;
+    rtos_handle_t h = rtos_eventgroup_create(&eg);
+
+    static rtos_tcb_t   ta;
+    static rtos_stack_t sa[64];
+    rtos_task_create(&ta, sa, 64, (void(*)(void*))1, NULL, "waiter", 1);
+
+    ta.state = TASK_BLOCKED; ta.eg_wait_mask = 0x01;
+    ta.eg_clear_mask = 0; ta.eg_wait_mode = RTOS_EG_WAIT_ANY;
+    ta.ipc_wait = &eg.wait_list;
+    list_insert_sorted(&eg.wait_list, &ta, ta.priority);
+
+    g_current = &ta;
+
+    uint32_t ret = rtos_eventgroup_set_from_isr(h, 0x01);
+    TEST(ret == 0x01);
+    TEST(ta.state == TASK_READY);
+    TEST(eg.wait_list == NULL);
+
+    g_current = NULL;
+    g_blocked = NULL;
+    g_tick_count = 0;
+}
+
+#endif // RTOS_ENABLE_EVENT_GROUPS
+
 static void test_trace_chrome(void)
 {
-    SUITE("trace_chrome ring buffer");
-
     rtos_trace_chrome_reset();
     TEST(rtos_trace_chrome_count() == 0);
     TEST(!rtos_trace_chrome_overflowed());
@@ -2524,4 +2864,16 @@ void test_main(int argc, char *argv[])
 #endif
     test_sem_give_isr_waiter();
     test_task_handle_self();
+#if RTOS_ENABLE_EVENT_GROUPS
+    test_eventgroup_basics();
+    test_eventgroup_set_get();
+    test_eventgroup_clear();
+    test_eventgroup_wait_no_block();
+    test_eventgroup_clear_on_exit();
+    test_eventgroup_set_wakes_any();
+    test_eventgroup_set_wakes_all();
+    test_eventgroup_timeout();
+    test_eventgroup_multi_waiter();
+    test_eventgroup_set_from_isr();
+#endif
 }

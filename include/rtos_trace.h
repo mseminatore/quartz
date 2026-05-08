@@ -90,6 +90,18 @@ void rtos_trace_queue_receive(void *handle, uint32_t aux1, uint32_t aux2);
 void rtos_trace_timer_fire(void *handle);
 #define RTOS_TRACE_TIMER_FIRE(h)          rtos_trace_timer_fire(h)
 
+// ---------------------------------------------------------------------------
+// Event group events
+// ---------------------------------------------------------------------------
+// eg_set   aux1=bits after set    aux2=number of tasks woken
+// eg_wait  aux1=bits that woke    aux2=1 if blocked path else 0
+
+void rtos_trace_eg_set(void *handle, uint32_t aux1, uint32_t aux2);
+#define RTOS_TRACE_EG_SET(h, a1, a2)      rtos_trace_eg_set((h), (a1), (a2))
+
+void rtos_trace_eg_wait(void *handle, uint32_t aux1, uint32_t aux2);
+#define RTOS_TRACE_EG_WAIT(h, a1, a2)     rtos_trace_eg_wait((h), (a1), (a2))
+
 #else  // RTOS_ENABLE_TRACE == 0  ----------------------------------------
 
 #define RTOS_TRACE_TASK_SWITCHED_IN(tcb)  ((void)0)
@@ -103,6 +115,8 @@ void rtos_trace_timer_fire(void *handle);
 #define RTOS_TRACE_QUEUE_SEND(h, a1, a2)  ((void)0)
 #define RTOS_TRACE_QUEUE_RECEIVE(h, a1, a2) ((void)0)
 #define RTOS_TRACE_TIMER_FIRE(h)          ((void)0)
+#define RTOS_TRACE_EG_SET(h, a1, a2)      ((void)0)
+#define RTOS_TRACE_EG_WAIT(h, a1, a2)     ((void)0)
 
 #endif  // RTOS_ENABLE_TRACE
 

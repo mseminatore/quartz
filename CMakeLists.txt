@@ -148,6 +148,7 @@ set(RTOS_KERNEL_SOURCES
     src/mutex.c
     src/queue.c
     src/timer.c
+    src/eventgroup.c
 )
 
 # ---------------------------------------------------------------------------
@@ -283,7 +284,7 @@ if(NOT RTOS_TARGET_PICO AND NOT RTOS_TARGET_CM0PLUS AND NOT RTOS_TARGET_AVR AND 
     # Sample programs (host simulation — hardware calls are stubbed inside each file)
     # ---------------------------------------------------------------------------
 
-    foreach(sample blink producer_consumer mutex_shared_resource uart_echo adc_pipeline timer_demo runtime_stats)
+    foreach(sample blink producer_consumer mutex_shared_resource uart_echo adc_pipeline timer_demo runtime_stats event_group_demo)
         add_executable(sample_${sample} samples/${sample}.c
                        ${RTOS_KERNEL_SOURCES}
                        port/host/port.c)
@@ -387,6 +388,14 @@ if(RTOS_TARGET_PICO)
     pico_add_extra_outputs(sample_pwm_fade)
     pico_enable_stdio_usb(sample_pwm_fade 1)
     pico_enable_stdio_uart(sample_pwm_fade 0)
+
+    # event_group_demo — fan-in demo using rtos_eventgroup_* (host + Pico)
+    add_executable(sample_event_group_demo samples/event_group_demo.c)
+    target_link_libraries(sample_event_group_demo quartz pico_stdlib)
+    target_include_directories(sample_event_group_demo PRIVATE include)
+    pico_add_extra_outputs(sample_event_group_demo)
+    pico_enable_stdio_usb(sample_event_group_demo 1)
+    pico_enable_stdio_uart(sample_event_group_demo 0)
 
     # wifi_http — Pico W only (requires CYW43 WiFi chip)
     if(PICO_BOARD STREQUAL "pico_w")

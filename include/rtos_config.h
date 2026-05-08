@@ -254,4 +254,13 @@
 #   define RTOS_ENABLE_RECURSIVE_MUTEX  1
 #endif
 
+// Enable event groups (rtos_eventgroup_*). Adds 9 bytes per TCB (rounded up
+// to 12 with alignment padding on 32-bit targets) for the wait-mask, clear-mask,
+// and wait-mode fields. The rtos_eventgroup_t struct itself is 8 bytes and is
+// caller-allocated. Setting to 0 removes all event group code and the extra TCB
+// fields, saving ~700–900 bytes of flash and RTOS_MAX_TASKS*12 bytes of RAM.
+#ifndef RTOS_ENABLE_EVENT_GROUPS
+#   define RTOS_ENABLE_EVENT_GROUPS  1
+#endif
+
 #endif // RTOS_CONFIG_H

@@ -64,6 +64,11 @@ typedef struct rtos_tcb {
 #if RTOS_NUM_CORES > 1
     uint8_t             core;                    // CPU core this task is pinned to
 #endif
+#if RTOS_ENABLE_EVENT_GROUPS
+    uint32_t            eg_wait_mask;   // bits this task is waiting for; overwritten with result bits on wake
+    uint32_t            eg_clear_mask;  // bits to clear in the event group on exit (0 = no clear)
+    uint8_t             eg_wait_mode;   // RTOS_EG_WAIT_ANY (0) or RTOS_EG_WAIT_ALL (1)
+#endif
 } rtos_tcb_t;
 
 // Create a task on the calling core. tcb and stack must be static storage
