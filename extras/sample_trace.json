@@ -1,0 +1,3079 @@
+{
+  "traceEvents": [
+    {
+      "name": "process_name",
+      "ph": "M",
+      "pid": 1,
+      "tid": 1,
+      "args": {
+        "name": "rtos"
+      }
+    },
+    {
+      "name": "thread_name",
+      "ph": "M",
+      "pid": 1,
+      "tid": 1,
+      "args": {
+        "name": "producer"
+      }
+    },
+    {
+      "name": "thread_sort_index",
+      "ph": "M",
+      "pid": 1,
+      "tid": 1,
+      "args": {
+        "sort_index": 2
+      }
+    },
+    {
+      "name": "thread_name",
+      "ph": "M",
+      "pid": 1,
+      "tid": 1001,
+      "args": {
+        "name": "producer/IPC"
+      }
+    },
+    {
+      "name": "thread_sort_index",
+      "ph": "M",
+      "pid": 1,
+      "tid": 1001,
+      "args": {
+        "sort_index": 3
+      }
+    },
+    {
+      "name": "thread_name",
+      "ph": "M",
+      "pid": 1,
+      "tid": 2,
+      "args": {
+        "name": "consumer"
+      }
+    },
+    {
+      "name": "thread_sort_index",
+      "ph": "M",
+      "pid": 1,
+      "tid": 2,
+      "args": {
+        "sort_index": 4
+      }
+    },
+    {
+      "name": "thread_name",
+      "ph": "M",
+      "pid": 1,
+      "tid": 1002,
+      "args": {
+        "name": "consumer/IPC"
+      }
+    },
+    {
+      "name": "thread_sort_index",
+      "ph": "M",
+      "pid": 1,
+      "tid": 1002,
+      "args": {
+        "sort_index": 5
+      }
+    },
+    {
+      "name": "thread_name",
+      "ph": "M",
+      "pid": 1,
+      "tid": 3,
+      "args": {
+        "name": "idle"
+      }
+    },
+    {
+      "name": "thread_sort_index",
+      "ph": "M",
+      "pid": 1,
+      "tid": 3,
+      "args": {
+        "sort_index": 6
+      }
+    },
+    {
+      "name": "thread_name",
+      "ph": "M",
+      "pid": 1,
+      "tid": 1003,
+      "args": {
+        "name": "idle/IPC"
+      }
+    },
+    {
+      "name": "thread_sort_index",
+      "ph": "M",
+      "pid": 1,
+      "tid": 1003,
+      "args": {
+        "sort_index": 7
+      }
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229011649,
+      "name": "running",
+      "args": {
+        "task": "consumer",
+        "prio": 1
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229011651,
+      "dur": 50,
+      "name": "sem_take(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "consumer",
+        "count": 0,
+        "blocked": 1
+      },
+      "cname": "good"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229012911,
+      "dur": 50,
+      "name": "queue_recv(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "consumer",
+        "count": 0,
+        "woke_sender": 0
+      },
+      "cname": "rail_animation"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229014165,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229014166,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229015425,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229015425,
+      "name": "running",
+      "args": {
+        "task": "idle",
+        "prio": 7
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229016685,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229016685,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229016687,
+      "dur": 50,
+      "name": "mutex_lock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 1,
+        "blocked": 0
+      },
+      "cname": "bad"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229017941,
+      "dur": 19,
+      "name": "queue_send(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "producer",
+        "count": 1,
+        "woke_receiver": 0
+      },
+      "cname": "rail_response"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229017961,
+      "dur": 19,
+      "name": "mutex_unlock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 0,
+        "woke_waiter": 0
+      },
+      "cname": "yellow"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229019197,
+      "dur": 50,
+      "name": "sem_give(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "producer",
+        "count": 0,
+        "woke_waiter": 1
+      },
+      "cname": "olive"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229020454,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229020454,
+      "name": "running",
+      "args": {
+        "task": "consumer",
+        "prio": 1
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229020456,
+      "dur": 50,
+      "name": "sem_take(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "consumer",
+        "count": 0,
+        "blocked": 1
+      },
+      "cname": "good"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229021711,
+      "dur": 50,
+      "name": "queue_recv(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "consumer",
+        "count": 0,
+        "woke_sender": 0
+      },
+      "cname": "rail_animation"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229022965,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229022965,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229024219,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229024220,
+      "name": "running",
+      "args": {
+        "task": "idle",
+        "prio": 7
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229025479,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229025479,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229025480,
+      "dur": 50,
+      "name": "mutex_lock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 1,
+        "blocked": 0
+      },
+      "cname": "bad"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229026737,
+      "dur": 19,
+      "name": "queue_send(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "producer",
+        "count": 1,
+        "woke_receiver": 0
+      },
+      "cname": "rail_response"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229026757,
+      "dur": 19,
+      "name": "mutex_unlock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 0,
+        "woke_waiter": 0
+      },
+      "cname": "yellow"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229027994,
+      "dur": 50,
+      "name": "sem_give(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "producer",
+        "count": 0,
+        "woke_waiter": 1
+      },
+      "cname": "olive"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229029251,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229029251,
+      "name": "running",
+      "args": {
+        "task": "consumer",
+        "prio": 1
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229029253,
+      "dur": 50,
+      "name": "sem_take(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "consumer",
+        "count": 0,
+        "blocked": 1
+      },
+      "cname": "good"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229030512,
+      "dur": 50,
+      "name": "queue_recv(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "consumer",
+        "count": 0,
+        "woke_sender": 0
+      },
+      "cname": "rail_animation"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229031767,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229031767,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229033026,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229033026,
+      "name": "running",
+      "args": {
+        "task": "idle",
+        "prio": 7
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229034283,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229034283,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229034285,
+      "dur": 50,
+      "name": "mutex_lock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 1,
+        "blocked": 0
+      },
+      "cname": "bad"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229035540,
+      "dur": 19,
+      "name": "queue_send(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "producer",
+        "count": 1,
+        "woke_receiver": 0
+      },
+      "cname": "rail_response"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229035560,
+      "dur": 19,
+      "name": "mutex_unlock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 0,
+        "woke_waiter": 0
+      },
+      "cname": "yellow"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229036800,
+      "dur": 50,
+      "name": "sem_give(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "producer",
+        "count": 0,
+        "woke_waiter": 1
+      },
+      "cname": "olive"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229038055,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229038056,
+      "name": "running",
+      "args": {
+        "task": "consumer",
+        "prio": 1
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229038057,
+      "dur": 50,
+      "name": "sem_take(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "consumer",
+        "count": 0,
+        "blocked": 1
+      },
+      "cname": "good"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229039317,
+      "dur": 50,
+      "name": "queue_recv(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "consumer",
+        "count": 0,
+        "woke_sender": 0
+      },
+      "cname": "rail_animation"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229040574,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229040574,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229041833,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229041834,
+      "name": "running",
+      "args": {
+        "task": "idle",
+        "prio": 7
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229043093,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229043093,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229043095,
+      "dur": 50,
+      "name": "mutex_lock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 1,
+        "blocked": 0
+      },
+      "cname": "bad"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229044354,
+      "dur": 19,
+      "name": "queue_send(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "producer",
+        "count": 1,
+        "woke_receiver": 0
+      },
+      "cname": "rail_response"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229044374,
+      "dur": 19,
+      "name": "mutex_unlock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 0,
+        "woke_waiter": 0
+      },
+      "cname": "yellow"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229045613,
+      "dur": 50,
+      "name": "sem_give(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "producer",
+        "count": 0,
+        "woke_waiter": 1
+      },
+      "cname": "olive"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229046870,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229046870,
+      "name": "running",
+      "args": {
+        "task": "consumer",
+        "prio": 1
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229046872,
+      "dur": 50,
+      "name": "sem_take(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "consumer",
+        "count": 0,
+        "blocked": 1
+      },
+      "cname": "good"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229048128,
+      "dur": 50,
+      "name": "queue_recv(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "consumer",
+        "count": 0,
+        "woke_sender": 0
+      },
+      "cname": "rail_animation"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229049386,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229049386,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229050645,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229050645,
+      "name": "running",
+      "args": {
+        "task": "idle",
+        "prio": 7
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229051902,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229051902,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229051904,
+      "dur": 50,
+      "name": "mutex_lock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 1,
+        "blocked": 0
+      },
+      "cname": "bad"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229053161,
+      "dur": 19,
+      "name": "queue_send(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "producer",
+        "count": 1,
+        "woke_receiver": 0
+      },
+      "cname": "rail_response"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229053181,
+      "dur": 19,
+      "name": "mutex_unlock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 0,
+        "woke_waiter": 0
+      },
+      "cname": "yellow"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229054421,
+      "dur": 50,
+      "name": "sem_give(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "producer",
+        "count": 0,
+        "woke_waiter": 1
+      },
+      "cname": "olive"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229055677,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229055677,
+      "name": "running",
+      "args": {
+        "task": "consumer",
+        "prio": 1
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229055679,
+      "dur": 50,
+      "name": "sem_take(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "consumer",
+        "count": 0,
+        "blocked": 1
+      },
+      "cname": "good"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229056939,
+      "dur": 50,
+      "name": "queue_recv(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "consumer",
+        "count": 0,
+        "woke_sender": 0
+      },
+      "cname": "rail_animation"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229058195,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229058195,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229059454,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229059454,
+      "name": "running",
+      "args": {
+        "task": "idle",
+        "prio": 7
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229060712,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229060712,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229060714,
+      "dur": 50,
+      "name": "mutex_lock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 1,
+        "blocked": 0
+      },
+      "cname": "bad"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229061974,
+      "dur": 19,
+      "name": "queue_send(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "producer",
+        "count": 1,
+        "woke_receiver": 0
+      },
+      "cname": "rail_response"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229061994,
+      "dur": 19,
+      "name": "mutex_unlock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 0,
+        "woke_waiter": 0
+      },
+      "cname": "yellow"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229063233,
+      "dur": 50,
+      "name": "sem_give(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "producer",
+        "count": 0,
+        "woke_waiter": 1
+      },
+      "cname": "olive"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229064487,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229064487,
+      "name": "running",
+      "args": {
+        "task": "consumer",
+        "prio": 1
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229064489,
+      "dur": 50,
+      "name": "sem_take(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "consumer",
+        "count": 0,
+        "blocked": 1
+      },
+      "cname": "good"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229065744,
+      "dur": 50,
+      "name": "queue_recv(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "consumer",
+        "count": 0,
+        "woke_sender": 0
+      },
+      "cname": "rail_animation"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229066998,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229066998,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229068255,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229068255,
+      "name": "running",
+      "args": {
+        "task": "idle",
+        "prio": 7
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229069511,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229069511,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229069513,
+      "dur": 50,
+      "name": "mutex_lock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 1,
+        "blocked": 0
+      },
+      "cname": "bad"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229070801,
+      "dur": 19,
+      "name": "queue_send(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "producer",
+        "count": 1,
+        "woke_receiver": 0
+      },
+      "cname": "rail_response"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229070821,
+      "dur": 19,
+      "name": "mutex_unlock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 0,
+        "woke_waiter": 0
+      },
+      "cname": "yellow"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229072057,
+      "dur": 50,
+      "name": "sem_give(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "producer",
+        "count": 0,
+        "woke_waiter": 1
+      },
+      "cname": "olive"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229073311,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229073311,
+      "name": "running",
+      "args": {
+        "task": "consumer",
+        "prio": 1
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229073313,
+      "dur": 50,
+      "name": "sem_take(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "consumer",
+        "count": 0,
+        "blocked": 1
+      },
+      "cname": "good"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229074571,
+      "dur": 50,
+      "name": "queue_recv(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "consumer",
+        "count": 0,
+        "woke_sender": 0
+      },
+      "cname": "rail_animation"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229075828,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229075828,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229077084,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229077084,
+      "name": "running",
+      "args": {
+        "task": "idle",
+        "prio": 7
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229078340,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229078340,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229078342,
+      "dur": 50,
+      "name": "mutex_lock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 1,
+        "blocked": 0
+      },
+      "cname": "bad"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229079603,
+      "dur": 19,
+      "name": "queue_send(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "producer",
+        "count": 1,
+        "woke_receiver": 0
+      },
+      "cname": "rail_response"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229079623,
+      "dur": 19,
+      "name": "mutex_unlock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 0,
+        "woke_waiter": 0
+      },
+      "cname": "yellow"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229080862,
+      "dur": 50,
+      "name": "sem_give(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "producer",
+        "count": 0,
+        "woke_waiter": 1
+      },
+      "cname": "olive"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229082119,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229082119,
+      "name": "running",
+      "args": {
+        "task": "consumer",
+        "prio": 1
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229082121,
+      "dur": 50,
+      "name": "sem_take(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "consumer",
+        "count": 0,
+        "blocked": 1
+      },
+      "cname": "good"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229083380,
+      "dur": 50,
+      "name": "queue_recv(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "consumer",
+        "count": 0,
+        "woke_sender": 0
+      },
+      "cname": "rail_animation"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229084638,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229084638,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229085898,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229085898,
+      "name": "running",
+      "args": {
+        "task": "idle",
+        "prio": 7
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229087156,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229087156,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229087158,
+      "dur": 50,
+      "name": "mutex_lock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 1,
+        "blocked": 0
+      },
+      "cname": "bad"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229088418,
+      "dur": 19,
+      "name": "queue_send(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "producer",
+        "count": 1,
+        "woke_receiver": 0
+      },
+      "cname": "rail_response"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229088438,
+      "dur": 19,
+      "name": "mutex_unlock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 0,
+        "woke_waiter": 0
+      },
+      "cname": "yellow"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229089677,
+      "dur": 50,
+      "name": "sem_give(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "producer",
+        "count": 0,
+        "woke_waiter": 1
+      },
+      "cname": "olive"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229090934,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229090934,
+      "name": "running",
+      "args": {
+        "task": "consumer",
+        "prio": 1
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229090936,
+      "dur": 50,
+      "name": "sem_take(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "consumer",
+        "count": 0,
+        "blocked": 1
+      },
+      "cname": "good"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229092195,
+      "dur": 50,
+      "name": "queue_recv(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "consumer",
+        "count": 0,
+        "woke_sender": 0
+      },
+      "cname": "rail_animation"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229093452,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229093452,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229094711,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229094711,
+      "name": "running",
+      "args": {
+        "task": "idle",
+        "prio": 7
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229095970,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229095970,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229095972,
+      "dur": 50,
+      "name": "mutex_lock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 1,
+        "blocked": 0
+      },
+      "cname": "bad"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229097231,
+      "dur": 19,
+      "name": "queue_send(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "producer",
+        "count": 1,
+        "woke_receiver": 0
+      },
+      "cname": "rail_response"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229097251,
+      "dur": 19,
+      "name": "mutex_unlock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 0,
+        "woke_waiter": 0
+      },
+      "cname": "yellow"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229098490,
+      "dur": 50,
+      "name": "sem_give(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "producer",
+        "count": 0,
+        "woke_waiter": 1
+      },
+      "cname": "olive"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229099747,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229099747,
+      "name": "running",
+      "args": {
+        "task": "consumer",
+        "prio": 1
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229099749,
+      "dur": 50,
+      "name": "sem_take(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "consumer",
+        "count": 0,
+        "blocked": 1
+      },
+      "cname": "good"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229101007,
+      "dur": 50,
+      "name": "queue_recv(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "consumer",
+        "count": 0,
+        "woke_sender": 0
+      },
+      "cname": "rail_animation"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229102264,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229102264,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229103519,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229103519,
+      "name": "running",
+      "args": {
+        "task": "idle",
+        "prio": 7
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229104779,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229104779,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229104781,
+      "dur": 50,
+      "name": "mutex_lock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 1,
+        "blocked": 0
+      },
+      "cname": "bad"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229106040,
+      "dur": 19,
+      "name": "queue_send(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "producer",
+        "count": 1,
+        "woke_receiver": 0
+      },
+      "cname": "rail_response"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229106060,
+      "dur": 19,
+      "name": "mutex_unlock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 0,
+        "woke_waiter": 0
+      },
+      "cname": "yellow"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229107299,
+      "dur": 50,
+      "name": "sem_give(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "producer",
+        "count": 0,
+        "woke_waiter": 1
+      },
+      "cname": "olive"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229108556,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229108556,
+      "name": "running",
+      "args": {
+        "task": "consumer",
+        "prio": 1
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229108558,
+      "dur": 50,
+      "name": "sem_take(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "consumer",
+        "count": 0,
+        "blocked": 1
+      },
+      "cname": "good"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229109816,
+      "dur": 50,
+      "name": "queue_recv(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "consumer",
+        "count": 0,
+        "woke_sender": 0
+      },
+      "cname": "rail_animation"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229111073,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229111073,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229112332,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229112332,
+      "name": "running",
+      "args": {
+        "task": "idle",
+        "prio": 7
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229113591,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229113591,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229113593,
+      "dur": 50,
+      "name": "mutex_lock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 1,
+        "blocked": 0
+      },
+      "cname": "bad"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229114850,
+      "dur": 19,
+      "name": "queue_send(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "producer",
+        "count": 1,
+        "woke_receiver": 0
+      },
+      "cname": "rail_response"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229114870,
+      "dur": 19,
+      "name": "mutex_unlock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 0,
+        "woke_waiter": 0
+      },
+      "cname": "yellow"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229116107,
+      "dur": 50,
+      "name": "sem_give(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "producer",
+        "count": 0,
+        "woke_waiter": 1
+      },
+      "cname": "olive"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229117360,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229117360,
+      "name": "running",
+      "args": {
+        "task": "consumer",
+        "prio": 1
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229117362,
+      "dur": 50,
+      "name": "sem_take(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "consumer",
+        "count": 0,
+        "blocked": 1
+      },
+      "cname": "good"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229118618,
+      "dur": 50,
+      "name": "queue_recv(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "consumer",
+        "count": 0,
+        "woke_sender": 0
+      },
+      "cname": "rail_animation"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229119873,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229119873,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229121129,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229121129,
+      "name": "running",
+      "args": {
+        "task": "idle",
+        "prio": 7
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229122385,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229122385,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229122387,
+      "dur": 50,
+      "name": "mutex_lock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 1,
+        "blocked": 0
+      },
+      "cname": "bad"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229123642,
+      "dur": 19,
+      "name": "queue_send(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "producer",
+        "count": 1,
+        "woke_receiver": 0
+      },
+      "cname": "rail_response"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229123662,
+      "dur": 19,
+      "name": "mutex_unlock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 0,
+        "woke_waiter": 0
+      },
+      "cname": "yellow"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229124899,
+      "dur": 50,
+      "name": "sem_give(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "producer",
+        "count": 0,
+        "woke_waiter": 1
+      },
+      "cname": "olive"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229126157,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229126157,
+      "name": "running",
+      "args": {
+        "task": "consumer",
+        "prio": 1
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229126159,
+      "dur": 50,
+      "name": "sem_take(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "consumer",
+        "count": 0,
+        "blocked": 1
+      },
+      "cname": "good"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229127417,
+      "dur": 50,
+      "name": "queue_recv(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "consumer",
+        "count": 0,
+        "woke_sender": 0
+      },
+      "cname": "rail_animation"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229128674,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229128674,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229129930,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229129930,
+      "name": "running",
+      "args": {
+        "task": "idle",
+        "prio": 7
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229131187,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229131187,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229131188,
+      "dur": 50,
+      "name": "mutex_lock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 1,
+        "blocked": 0
+      },
+      "cname": "bad"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229132446,
+      "dur": 19,
+      "name": "queue_send(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "producer",
+        "count": 1,
+        "woke_receiver": 0
+      },
+      "cname": "rail_response"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229132466,
+      "dur": 19,
+      "name": "mutex_unlock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 0,
+        "woke_waiter": 0
+      },
+      "cname": "yellow"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229133702,
+      "dur": 50,
+      "name": "sem_give(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "producer",
+        "count": 0,
+        "woke_waiter": 1
+      },
+      "cname": "olive"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229134959,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229134959,
+      "name": "running",
+      "args": {
+        "task": "consumer",
+        "prio": 1
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229134961,
+      "dur": 50,
+      "name": "sem_take(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "consumer",
+        "count": 0,
+        "blocked": 1
+      },
+      "cname": "good"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229136220,
+      "dur": 50,
+      "name": "queue_recv(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "consumer",
+        "count": 0,
+        "woke_sender": 0
+      },
+      "cname": "rail_animation"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229137477,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229137477,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229138735,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229138735,
+      "name": "running",
+      "args": {
+        "task": "idle",
+        "prio": 7
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229139994,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229139994,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229139996,
+      "dur": 50,
+      "name": "mutex_lock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 1,
+        "blocked": 0
+      },
+      "cname": "bad"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229141255,
+      "dur": 19,
+      "name": "queue_send(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "producer",
+        "count": 1,
+        "woke_receiver": 0
+      },
+      "cname": "rail_response"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229141275,
+      "dur": 19,
+      "name": "mutex_unlock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 0,
+        "woke_waiter": 0
+      },
+      "cname": "yellow"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229142513,
+      "dur": 50,
+      "name": "sem_give(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "producer",
+        "count": 0,
+        "woke_waiter": 1
+      },
+      "cname": "olive"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229143767,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229143768,
+      "name": "running",
+      "args": {
+        "task": "consumer",
+        "prio": 1
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229143769,
+      "dur": 50,
+      "name": "sem_take(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "consumer",
+        "count": 0,
+        "blocked": 1
+      },
+      "cname": "good"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229145026,
+      "dur": 50,
+      "name": "queue_recv(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "consumer",
+        "count": 0,
+        "woke_sender": 0
+      },
+      "cname": "rail_animation"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229146279,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229146279,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229147535,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229147535,
+      "name": "running",
+      "args": {
+        "task": "idle",
+        "prio": 7
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229148791,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229148791,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229148792,
+      "dur": 50,
+      "name": "mutex_lock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 1,
+        "blocked": 0
+      },
+      "cname": "bad"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229150047,
+      "dur": 19,
+      "name": "queue_send(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "producer",
+        "count": 1,
+        "woke_receiver": 0
+      },
+      "cname": "rail_response"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229150067,
+      "dur": 19,
+      "name": "mutex_unlock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 0,
+        "woke_waiter": 0
+      },
+      "cname": "yellow"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229151304,
+      "dur": 50,
+      "name": "sem_give(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "producer",
+        "count": 0,
+        "woke_waiter": 1
+      },
+      "cname": "olive"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229152557,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229152558,
+      "name": "running",
+      "args": {
+        "task": "consumer",
+        "prio": 1
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229152559,
+      "dur": 50,
+      "name": "sem_take(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "consumer",
+        "count": 0,
+        "blocked": 1
+      },
+      "cname": "good"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229153816,
+      "dur": 50,
+      "name": "queue_recv(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "consumer",
+        "count": 0,
+        "woke_sender": 0
+      },
+      "cname": "rail_animation"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229155071,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229155071,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229156327,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229156327,
+      "name": "running",
+      "args": {
+        "task": "idle",
+        "prio": 7
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229157583,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229157583,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229157585,
+      "dur": 50,
+      "name": "mutex_lock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 1,
+        "blocked": 0
+      },
+      "cname": "bad"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229158841,
+      "dur": 19,
+      "name": "queue_send(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "producer",
+        "count": 1,
+        "woke_receiver": 0
+      },
+      "cname": "rail_response"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229158861,
+      "dur": 19,
+      "name": "mutex_unlock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 0,
+        "woke_waiter": 0
+      },
+      "cname": "yellow"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229160097,
+      "dur": 50,
+      "name": "sem_give(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "producer",
+        "count": 0,
+        "woke_waiter": 1
+      },
+      "cname": "olive"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229161351,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229161351,
+      "name": "running",
+      "args": {
+        "task": "consumer",
+        "prio": 1
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229161353,
+      "dur": 50,
+      "name": "sem_take(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "consumer",
+        "count": 0,
+        "blocked": 1
+      },
+      "cname": "good"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229162608,
+      "dur": 50,
+      "name": "queue_recv(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "consumer",
+        "count": 0,
+        "woke_sender": 0
+      },
+      "cname": "rail_animation"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229163863,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229163863,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229165119,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229165119,
+      "name": "running",
+      "args": {
+        "task": "idle",
+        "prio": 7
+      }
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1229166375,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229166375,
+      "name": "running",
+      "args": {
+        "task": "producer",
+        "prio": 2
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229166376,
+      "dur": 50,
+      "name": "mutex_lock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 1,
+        "blocked": 0
+      },
+      "cname": "bad"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229167632,
+      "dur": 19,
+      "name": "queue_send(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "producer",
+        "count": 1,
+        "woke_receiver": 0
+      },
+      "cname": "rail_response"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229167652,
+      "dur": 19,
+      "name": "mutex_unlock(h0x4)",
+      "args": {
+        "handle": "h0x4",
+        "by_task": "producer",
+        "nest_count": 0,
+        "woke_waiter": 0
+      },
+      "cname": "yellow"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1001,
+      "ts": 1229168889,
+      "dur": 50,
+      "name": "sem_give(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "producer",
+        "count": 0,
+        "woke_waiter": 1
+      },
+      "cname": "olive"
+    },
+    {
+      "ph": "E",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1229170143,
+      "name": "running"
+    },
+    {
+      "ph": "B",
+      "pid": 1,
+      "tid": 2,
+      "ts": 1229170143,
+      "name": "running",
+      "args": {
+        "task": "consumer",
+        "prio": 1
+      }
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229170144,
+      "dur": 50,
+      "name": "sem_take(h0x6)",
+      "args": {
+        "handle": "h0x6",
+        "by_task": "consumer",
+        "count": 0,
+        "blocked": 1
+      },
+      "cname": "good"
+    },
+    {
+      "ph": "X",
+      "pid": 1,
+      "tid": 1002,
+      "ts": 1229171400,
+      "dur": 50,
+      "name": "queue_recv(h0x5)",
+      "args": {
+        "handle": "h0x5",
+        "by_task": "consumer",
+        "count": 0,
+        "woke_sender": 0
+      },
+      "cname": "rail_animation"
+    }
+  ],
+  "displayTimeUnit": "ns"
+}

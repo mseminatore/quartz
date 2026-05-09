@@ -497,6 +497,13 @@ python3 tools/trace_viewer.py trace.json -o out.html  # explicit output path
 python3 tools/trace_viewer.py trace.json --open   # write + open in default browser
 ```
 
+A pre-captured sample (`extras/sample_trace.json`) is included so you can try
+the viewer immediately without building the firmware demo:
+
+```sh
+python3 tools/trace_viewer.py extras/sample_trace.json --open
+```
+
 The viewer provides:
 - **Thread lanes** labelled with task names, sorted by sort-index
 - **Coloured bars** for `running` slices and all IPC events (honouring `cname` colours)
