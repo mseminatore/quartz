@@ -462,7 +462,9 @@ cmake -B build -DRTOS_TRACE_BACKEND=chrome
 cmake --build build --target sample_trace_demo
 ./build/sample_trace_demo > capture.hex
 python3 tools/trace_to_chrome.py capture.hex --hex -o trace.json
-# Then open trace.json in chrome://tracing or https://ui.perfetto.dev
+# Open in chrome://tracing or https://ui.perfetto.dev
+# — or — generate a self-contained viewer that works in any browser:
+python3 tools/trace_viewer.py trace.json --open
 ```
 
 ### Windows (via WSL)
@@ -477,10 +479,31 @@ wsl -e bash -lc "cd /mnt/c/dev/quartz && python3 tools/trace_to_chrome.py captur
 ```
 
 Then open `trace.json` (which now lives in your repo on the Windows side)
-in `chrome://tracing` or [Perfetto UI](https://ui.perfetto.dev).
+in `chrome://tracing` or [Perfetto UI](https://ui.perfetto.dev), or
+generate a self-contained viewer: `python3 tools/trace_viewer.py trace.json --open`.
 
 > Use a **separate build directory** (e.g. `build_wsl_trace/`) for the WSL
 > build so it doesn't collide with your native MSVC `build/` directory.
+
+### Standalone browser viewer (no Chrome required)
+
+`tools/trace_viewer.py` converts any `trace.json` into a single self-contained
+HTML file that opens in Firefox, Safari, or any modern browser with no internet
+connection or external dependencies:
+
+```sh
+python3 tools/trace_viewer.py trace.json          # writes trace.html
+python3 tools/trace_viewer.py trace.json -o out.html  # explicit output path
+python3 tools/trace_viewer.py trace.json --open   # write + open in default browser
+```
+
+The viewer provides:
+- **Thread lanes** labelled with task names, sorted by sort-index
+- **Coloured bars** for `running` slices and all IPC events (honouring `cname` colours)
+- **Mouse-wheel zoom** centred on the cursor; **click-drag pan** (both axes)
+- **Click a bar** to open a detail panel showing `ts`, `dur`, and all `args`
+- **Hover tooltip** with a quick event summary
+- Keyboard: `+`/`-` zoom, arrow keys pan, `F` fit, `Escape` dismiss detail
 
 ### How to read the visualization
 
