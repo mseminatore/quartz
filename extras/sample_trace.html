@@ -23,10 +23,12 @@ canvas{display:block}
 </style></head>
 <body>
 <div id="toolbar">
-  <h1>Trace — sample_trace.json</h1>
+  <h1 id="ttl">Trace — sample_trace.json</h1>
+  <button id="bLoad">Load JSON…</button>
+  <input type="file" id="fileIn" accept=".json" style="display:none">
   <button id="bFit">Fit (F)</button>
-  <button id="bZI">Zoom In (+)</button>
-  <button id="bZO">Zoom Out (−)</button>
+  <button id="bZI">Zoom In (W/+)</button>
+  <button id="bZO">Zoom Out (S/−)</button>
   <span id="status"></span>
 </div>
 <div id="outer">
@@ -123,7 +125,7 @@ function processTrace(trace) {
   return {threads, all, byT, mn, mx};
 }
 
-const D = processTrace(TRACE);
+let D = processTrace(TRACE);
 
 /* ── DOM refs ── */
 const cv      = document.getElementById('cv');
@@ -448,16 +450,19 @@ cv.addEventListener('mouseleave', () => {
 
 /* ── Keyboard shortcuts ── */
 document.addEventListener('keydown', e => {
-  if (e.target !== document.body) return;
+  /* Ignore shortcuts while typing in any text input */
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
   const panStep = (cv.width - LW) * 0.15;
   switch (e.key) {
-    case '+': case '=': zoomAt(1.4); break;
-    case '-': case '_': zoomAt(1 / 1.4); break;
-    case 'f': case 'F': fitAll(); break;
-    case 'ArrowLeft':  vs -= panStep / vsc; render(); break;
-    case 'ArrowRight': vs += panStep / vsc; render(); break;
+    /* Zoom — W/S like Perfetto, +/- traditional */
+    case 'w': case 'W': case '+': case '=': zoomAt(1.4); break;
+    case 's': case 'S': case '-': case '_': zoomAt(1 / 1.4); break;
+    /* Pan — A/D like Perfetto, arrow keys traditional */
+    case 'a': case 'A': case 'ArrowLeft':  vs -= panStep / vsc; render(); break;
+    case 'd': case 'D': case 'ArrowRight': vs += panStep / vsc; render(); break;
     case 'ArrowUp':    sy = Math.max(0, sy - LH * 3); render(); break;
     case 'ArrowDown':  sy += LH * 3; render(); break;
+    case 'f': case 'F': fitAll(); break;
     case 'Escape':
       sel = null; det.style.display = 'none'; resize(); render(); break;
   }
@@ -467,6 +472,33 @@ document.addEventListener('keydown', e => {
 document.getElementById('bFit').onclick = fitAll;
 document.getElementById('bZI').onclick  = () => zoomAt(1.4);
 document.getElementById('bZO').onclick  = () => zoomAt(1 / 1.4);
+
+/* ── Load JSON button ── */
+const fileIn = document.getElementById('fileIn');
+document.getElementById('bLoad').onclick = () => fileIn.click();
+fileIn.onchange = e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const trace = JSON.parse(ev.target.result);
+      D = processTrace(trace);
+      const title = 'Trace \u2014 ' + file.name;
+      document.getElementById('ttl').textContent = title;
+      document.title = title;
+      sel = null;
+      det.style.display = 'none';
+      resize();
+      fitAll();
+    } catch (err) {
+      alert('Failed to parse JSON: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  /* Reset so the same file can be re-loaded */
+  e.target.value = '';
+};
 
 /* ── Init ── */
 window.addEventListener('load', () => { resize(); fitAll(); });
