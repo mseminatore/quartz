@@ -99,6 +99,7 @@ static void test_task_create(void)
     TEST(NULL == rtos_task_create(&tcb, NULL, 64, (void(*)(void*))1, NULL, "x", 0));
     TEST(NULL == rtos_task_create(&tcb, stack, 64, NULL, NULL, "x", 0));
     TEST(NULL == rtos_task_create(&tcb, stack, 64, (void(*)(void*))1, NULL, "x", RTOS_MAX_PRIORITIES));
+    TEST(NULL == rtos_task_create(&tcb, stack, 0,  (void(*)(void*))1, NULL, "x", 0));  // zero stack
 }
 
 static void test_semaphore(void)
@@ -2724,6 +2725,354 @@ static void test_eventgroup_set_from_isr(void)
 
 #endif // RTOS_ENABLE_EVENT_GROUPS
 
+// ---------------------------------------------------------------------------
+// EDGE-CASE a: ISR receive unblocks a task blocked on a full-queue send.
+// ---------------------------------------------------------------------------
+static void test_queue_isr_recv_unblocks_sender(void)
+{
+    SUITE("queue: ISR receive unblocks blocked sender");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_queue_t q;
+    static int buf[1];
+    static rtos_tcb_t sender_tcb;
+    static rtos_stack_t sender_stack[64];
+
+    rtos_task_create(&sender_tcb, sender_stack, 64, (void(*)(void*))1, NULL, "s", 1);
+    rtos_handle_t qh = rtos_queue_create(&q, buf, sizeof(int), 1);
+
+    // Fill the queue.
+    int v1 = 42;
+    TEST(RTOS_OK == rtos_queue_send(qh, &v1, RTOS_NO_WAIT));
+    TEST(rtos_queue_messages_waiting(qh) == 1);
+
+    // Manually block the sender on the send wait-list (simulates blocking send).
+    g_current = &sender_tcb;
+    sender_tcb.state = TASK_BLOCKED;
+    sender_tcb.ipc_wait = &q.send_wait;
+    list_insert_sorted(&q.send_wait, &sender_tcb, sender_tcb.priority);
+    TEST(q.send_wait == &sender_tcb);
+
+    // ISR drains one item — must unblock the waiting sender.
+    int got = -1;
+    int r = rtos_queue_receive_from_isr(qh, &got);
+    TEST(r == RTOS_OK);
+    TEST(got == v1);
+    TEST(q.send_wait == NULL);
+    TEST(sender_tcb.state == TASK_READY);
+
+    g_current = NULL;
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// EDGE-CASE b: queue receive times out on an empty queue (finite timeout path).
+// ---------------------------------------------------------------------------
+static void test_queue_recv_timeout(void)
+{
+    SUITE("queue: receive times out on empty queue");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_queue_t q2;
+    static int buf2[4];
+    rtos_handle_t qh = rtos_queue_create(&q2, buf2, sizeof(int), 4);
+
+    static rtos_tcb_t waiter;
+    static rtos_stack_t ws[64];
+    rtos_task_create(&waiter, ws, 64, (void(*)(void*))1, NULL, "w", 1);
+    g_current = &waiter;
+    waiter.state = TASK_RUNNING;
+
+    // No-wait on empty queue returns TIMEOUT immediately.
+    int got = 0;
+    TEST(RTOS_TIMEOUT == rtos_queue_receive(qh, &got, RTOS_NO_WAIT));
+
+    // Finite timeout: manually place waiter on recv_wait and advance the tick
+    // counter past the deadline to exercise the unblock-by-timeout path.
+    waiter.state = TASK_BLOCKED;
+    waiter.ipc_wait = &q2.recv_wait;
+    waiter.wakeup_tick = g_tick_count + 5;
+    list_insert_sorted(&q2.recv_wait, &waiter, waiter.priority);
+    list_insert_sorted_signed(&g_blocked, &waiter, (rtos_tick_t)waiter.wakeup_tick);
+    TEST(q2.recv_wait == &waiter);
+    TEST(g_blocked == &waiter);
+
+    // Advance the tick beyond the deadline — tick handler must unblock waiter.
+    // The tick handler removes the task from g_blocked and makes it TASK_READY,
+    // but does NOT clear q2.recv_wait (that cleanup runs in the IPC function's
+    // continuation code after port_request_reschedule returns on real hardware).
+    g_tick_count += 6;
+    rtos_tick_handler();
+    TEST(g_blocked == NULL);
+    TEST(waiter.state == TASK_READY);
+
+    g_current = NULL;
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// EDGE-CASE c: recursive mutex nest_count overflow returns RTOS_ERR.
+// ---------------------------------------------------------------------------
+#if RTOS_ENABLE_RECURSIVE_MUTEX
+static void test_mutex_recursive_overflow(void)
+{
+    SUITE("recursive mutex: nest_count overflow guard");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+
+    static rtos_tcb_t ot;
+    static rtos_stack_t os[64];
+    rtos_task_create(&ot, os, 64, (void(*)(void*))1, NULL, "ov", 1);
+    g_current = &ot;
+    ot.state = TASK_RUNNING;
+
+    static rtos_mutex_t rm_ov;
+    rtos_handle_t h = rtos_mutex_create_recursive(&rm_ov);
+
+    // Lock 255 times — should all succeed.
+    for (int i = 0; i < 255; i++) {
+        TEST(rtos_mutex_lock(h, RTOS_NO_WAIT) == RTOS_OK);
+    }
+    TEST(rm_ov.nest_count == 255);
+
+    // 256th lock must be rejected by the overflow guard.
+    TEST(rtos_mutex_lock(h, RTOS_NO_WAIT) == RTOS_ERR);
+    TEST(rm_ov.nest_count == 255);
+
+    // Drain the nest so state is clean for subsequent tests.
+    for (int i = 0; i < 255; i++) rtos_mutex_unlock(h);
+    TEST(rm_ov.owner == NULL);
+    TEST(rm_ov.nest_count == 0);
+
+    g_current = NULL;
+}
+#endif // RTOS_ENABLE_RECURSIVE_MUTEX
+
+// ---------------------------------------------------------------------------
+// EDGE-CASE d: transitive priority inheritance — A holds M1, B holds M2;
+//   C (highest priority) waits on M1 → A is boosted (single-level PI).
+//   The kernel does NOT propagate the boost transitively to B (by design —
+//   only one level of PI is implemented).  This test documents both the
+//   first-level boost and the absence of transitive propagation.
+//
+// We construct the state manually (same as test_priority_inheritance_multi_mutex)
+// because on the host port_request_reschedule() is a no-op, so calling
+// rtos_mutex_lock with a finite timeout applies and immediately removes the
+// boost within the same call.
+// ---------------------------------------------------------------------------
+#if RTOS_ENABLE_PRIORITY_INHERITANCE
+static void test_priority_inheritance_transitive(void)
+{
+    SUITE("priority inheritance — transitive chain (single-level)");
+
+    g_blocked = NULL;
+    g_tick_count = 0;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+
+    static rtos_tcb_t ta_pi, tb_pi, tc_pi;
+    static rtos_stack_t sa_pi[64], sb_pi[64], sc_pi[64];
+    rtos_task_create(&ta_pi, sa_pi, 64, (void(*)(void*))1, NULL, "A", 4);
+    rtos_task_create(&tb_pi, sb_pi, 64, (void(*)(void*))1, NULL, "B", 3);
+    rtos_task_create(&tc_pi, sc_pi, 64, (void(*)(void*))1, NULL, "C", 0);
+
+    ready_remove(&tb_pi); tb_pi.state = TASK_BLOCKED;
+    ready_remove(&tc_pi); tc_pi.state = TASK_BLOCKED;
+
+    static rtos_mutex_t m1_pi, m2_pi;
+    rtos_handle_t h1 = rtos_mutex_create(&m1_pi);
+    rtos_handle_t h2 = rtos_mutex_create(&m2_pi);
+
+    // A acquires M1, B acquires M2.
+    g_current = &ta_pi; ta_pi.state = TASK_RUNNING;
+    rtos_mutex_lock(h1, RTOS_NO_WAIT);
+    g_current = &tb_pi; tb_pi.state = TASK_RUNNING;
+    rtos_mutex_lock(h2, RTOS_NO_WAIT);
+
+    TEST(m1_pi.owner == &ta_pi);
+    TEST(m2_pi.owner == &tb_pi);
+
+    // Manually place C in M1's wait list and apply the first-level PI boost
+    // to A. This mirrors what rtos_mutex_lock does when a task blocks — we
+    // use the manual approach so the boost stays in place for inspection.
+    list_insert_sorted(&m1_pi.wait_list, &tc_pi, tc_pi.priority);
+    ta_pi.priority = 0;   // first-level boost: A elevated to C's priority
+
+    TEST(ta_pi.priority == 0);
+    TEST(ta_pi.base_priority == 4);
+
+    // Now simulate A also waiting on M2 (still at boosted priority 0).
+    // Single-level PI means B is NOT automatically boosted — only the direct
+    // owner of the mutex that the highest-priority waiter is blocked on gets
+    // boosted.
+    list_insert_sorted(&m2_pi.wait_list, &ta_pi, ta_pi.priority);
+    TEST(tb_pi.priority == 3);   // B is unaffected — no transitive boost
+
+    // A is the highest-priority waiter on M2 (priority 0). When B unlocks M2,
+    // A acquires it; B's priority reverts because it had no boosting waiters.
+    g_current = &tb_pi; tb_pi.state = TASK_RUNNING;
+    rtos_mutex_unlock(h2);
+    TEST(m2_pi.owner == &ta_pi);
+    TEST(tb_pi.priority == 3);   // B unchanged throughout
+
+    // Teardown: A unlocks M1 and M2; clear manual list entries.
+    list_remove(&m1_pi.wait_list, &tc_pi);
+    ta_pi.priority = ta_pi.base_priority;
+    g_current = &ta_pi; ta_pi.state = TASK_RUNNING;
+    rtos_mutex_unlock(h1);
+    rtos_mutex_unlock(h2);
+
+    g_current = NULL;
+}
+#endif // RTOS_ENABLE_PRIORITY_INHERITANCE
+
+// ---------------------------------------------------------------------------
+// EDGE-CASE e: rtos_task_notify_from_isr coalesces — calling twice only
+//   leaves one pending notification.
+// ---------------------------------------------------------------------------
+#if RTOS_ENABLE_TASK_NOTIFY
+static void test_notify_from_isr_coalesce(void)
+{
+    SUITE("task notify_from_isr coalescing");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_tcb_t nc_tcb;
+    static rtos_stack_t nc_stack[64];
+    rtos_task_create(&nc_tcb, nc_stack, 64, (void(*)(void*))1, NULL, "nc", 1);
+    g_current = &nc_tcb;
+    nc_tcb.state = TASK_RUNNING;
+
+    // First ISR notify.
+    rtos_task_notify_from_isr((rtos_handle_t)&nc_tcb);
+    TEST(nc_tcb.notif_pending == 1);
+
+    // Second ISR notify before the task consumes the first — must coalesce.
+    rtos_task_notify_from_isr((rtos_handle_t)&nc_tcb);
+    TEST(nc_tcb.notif_pending == 1);   // still 1, not 2
+
+    // The single pending notification is consumed by one wait.
+    int r = rtos_task_notify_wait(RTOS_NO_WAIT);
+    TEST(r == RTOS_OK);
+    TEST(nc_tcb.notif_pending == 0);
+
+    // A second wait immediately after sees no pending notification.
+    nc_tcb.state = TASK_RUNNING;
+    r = rtos_task_notify_wait(RTOS_NO_WAIT);
+    TEST(r == RTOS_TIMEOUT);
+
+    g_current = NULL;
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+#endif // RTOS_ENABLE_TASK_NOTIFY
+
+// ---------------------------------------------------------------------------
+// EDGE-CASE f: stack watermark boundary — HWM reports correct usage after
+//   partial use (simulated by overwriting some sentinel words from the top).
+// ---------------------------------------------------------------------------
+static void test_stack_watermark_boundary(void)
+{
+    SUITE("stack watermark boundary");
+
+#if RTOS_STACK_WATERMARK && RTOS_STACK_BYTES_PER_WORD == 4
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+
+    static rtos_tcb_t wm_tcb;
+    static rtos_stack_t wm_stack[32];
+
+    rtos_handle_t h = rtos_task_create(&wm_tcb, wm_stack, 32,
+                                       (void(*)(void*))1, NULL, "wm", 1);
+    TEST(h != NULL);
+
+    // After creation the entire stack is filled with 0xA5A5A5A5.
+    // Simulate usage by overwriting the top 4 words (highest addresses = last
+    // used by the context frame). HWM counts unused words from the bottom.
+    uint32_t *p = (uint32_t *)wm_stack;
+    uint32_t  total = 32;
+
+    // Corrupt top 4 words to simulate 4 words of stack use.
+    p[total - 1] = 0xDEADBEEFu;
+    p[total - 2] = 0xDEADBEEFu;
+    p[total - 3] = 0xDEADBEEFu;
+    p[total - 4] = 0xDEADBEEFu;
+
+    uint32_t hwm = rtos_task_stack_high_water_mark(h);
+    // hwm counts remaining unused words at the bottom of the stack.
+    // With 4 words used at the top, 28 words from the bottom remain untouched.
+    TEST(hwm == 28);
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+#else
+    // When RTOS_STACK_WATERMARK is disabled or on AVR, skip gracefully.
+    TEST(1);
+#endif
+}
+
+// ---------------------------------------------------------------------------
+// EDGE-CASE g: event group — two ISR set calls then a task wait resolves
+//   correctly (both bits arrive before the wait; task unblocked immediately).
+// ---------------------------------------------------------------------------
+#if RTOS_ENABLE_EVENT_GROUPS
+static void test_eventgroup_isr_set_then_wait(void)
+{
+    SUITE("event group: ISR sets both bits before task wait");
+
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+    g_tick_count = 0;
+
+    static rtos_eventgroup_t eg2;
+    rtos_handle_t h = rtos_eventgroup_create(&eg2);
+
+    // Simulate two ISRs each setting a distinct bit.
+    rtos_eventgroup_set_from_isr(h, 0x01);
+    rtos_eventgroup_set_from_isr(h, 0x02);
+    TEST(rtos_eventgroup_get(h) == 0x03);
+
+    // Task waits for BOTH bits (ALL mode) with no-wait — should succeed
+    // immediately because both bits are already set.
+    static rtos_tcb_t eg_tcb;
+    static rtos_stack_t eg_stack[64];
+    rtos_task_create(&eg_tcb, eg_stack, 64, (void(*)(void*))1, NULL, "eg", 1);
+    g_current = &eg_tcb;
+    eg_tcb.state = TASK_RUNNING;
+
+    uint32_t bits = rtos_eventgroup_wait(h, 0x03, RTOS_EG_WAIT_ALL,
+                                         1 /* clear_on_exit */, RTOS_NO_WAIT);
+    TEST(bits == 0x03);
+    TEST(rtos_eventgroup_get(h) == 0x00);  // cleared on exit
+
+    g_current = NULL;
+    g_blocked = NULL;
+    g_ready_bitmap = 0;
+    for (int i = 0; i < RTOS_MAX_PRIORITIES; i++) g_ready[i] = NULL;
+}
+#endif // RTOS_ENABLE_EVENT_GROUPS
+
 static void test_trace_chrome(void)
 {
     rtos_trace_chrome_reset();
@@ -2875,5 +3224,19 @@ void test_main(int argc, char *argv[])
     test_eventgroup_timeout();
     test_eventgroup_multi_waiter();
     test_eventgroup_set_from_isr();
+    test_eventgroup_isr_set_then_wait();
 #endif
+    // Edge-case additions
+    test_queue_isr_recv_unblocks_sender();
+    test_queue_recv_timeout();
+#if RTOS_ENABLE_RECURSIVE_MUTEX
+    test_mutex_recursive_overflow();
+#endif
+#if RTOS_ENABLE_PRIORITY_INHERITANCE
+    test_priority_inheritance_transitive();
+#endif
+#if RTOS_ENABLE_TASK_NOTIFY
+    test_notify_from_isr_coalesce();
+#endif
+    test_stack_watermark_boundary();
 }

@@ -263,4 +263,25 @@
 #   define RTOS_ENABLE_EVENT_GROUPS  1
 #endif
 
+// --------------------------------------------------------------------------
+// Chrome trace recorder options (only active when RTOS_TRACE_BACKEND=chrome)
+// --------------------------------------------------------------------------
+
+// Maximum number of distinct kernel object handles (tasks, semaphores, mutexes,
+// queues, timers, event groups) that the trace recorder can assign names to.
+// If more handles are registered than this limit allows, the excess handles are
+// recorded with an anonymous ID (0) and will appear unlabelled in the trace
+// viewer. Increase this if your application creates more than 32 named objects.
+#ifndef RTOS_TRACE_HANDLE_TABLE_SIZE
+#   define RTOS_TRACE_HANDLE_TABLE_SIZE  32
+#endif
+
+// Size of the in-memory trace ring buffer in bytes. Must be a multiple of 16
+// (the record size). Minimum 256 bytes. When the buffer fills, the oldest
+// record is silently overwritten; rtos_trace_get_overflowed() returns 1 if
+// this has happened.
+#ifndef RTOS_TRACE_BUFFER_BYTES
+#   define RTOS_TRACE_BUFFER_BYTES  4096
+#endif
+
 #endif // RTOS_CONFIG_H

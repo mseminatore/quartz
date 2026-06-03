@@ -21,9 +21,6 @@
 // ---------------------------------------------------------------------------
 // Handle → name/id table
 // ---------------------------------------------------------------------------
-#ifndef RTOS_TRACE_HANDLE_TABLE_SIZE
-#  define RTOS_TRACE_HANDLE_TABLE_SIZE  32
-#endif
 
 typedef struct {
     void   *handle;

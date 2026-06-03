@@ -43,6 +43,7 @@ KERNEL_SOURCES = [
     "src/mutex.c",
     "src/queue.c",
     "src/timer.c",
+    "src/eventgroup.c",
 ]
 
 # Internal headers to copy
@@ -63,6 +64,7 @@ PUBLIC_HEADERS = [
     "include/rtos_mutex.h",
     "include/rtos_queue.h",
     "include/rtos_timer.h",
+    "include/rtos_eventgroup.h",
     "include/rtos_trace.h",
     "include/rtos_trace_chrome.h",
 ]

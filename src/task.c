@@ -301,7 +301,7 @@ static rtos_handle_t task_create_impl(rtos_tcb_t   *tcb,
                                       uint8_t       priority,
                                       uint8_t       core)
 {
-    if (!tcb || !stack || !func || priority >= RTOS_MAX_PRIORITIES)
+    if (!tcb || !stack || !func || stack_words == 0 || priority >= RTOS_MAX_PRIORITIES)
         return NULL;
 
     // Initialize TCB fields

@@ -32,6 +32,7 @@
 #include <stddef.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <avr/sleep.h>
 #include "port.h"
 
 // ---------------------------------------------------------------------------
@@ -277,19 +278,24 @@ void port_start_first_task(void)
 }
 
 // ---------------------------------------------------------------------------
-// port_cpu_idle / port_core_id
+// port_cpu_idle — put the CPU into SLEEP_MODE_IDLE until the next interrupt.
 //
-// AVR sleep requires the application to configure the sleep mode (SM bits in
-// SMCR) and set SE before calling sleep_cpu().  Because sleep configuration
-// is board-specific, we rely on the weak no-op stubs in task.c by default.
-// Applications that want WFI-style idle should override port_cpu_idle() in
-// their own source file:
-//
-//   #include <avr/sleep.h>
-//   void port_cpu_idle(void) { sleep_mode(); }
-//
-// port_core_id always returns 0 (AVR is single-core; inherited from weak stub).
+// SLEEP_MODE_IDLE halts only the CPU clock; all peripheral clocks (Timer1,
+// USART, SPI, ADC, etc.) remain active so the tick ISR fires normally and
+// wakes the CPU on every tick.  This is the safest sleep mode and requires no
+// board-specific configuration.  Applications that need deeper sleep (e.g.
+// POWER_DOWN) should override this function in their own source file.
 // ---------------------------------------------------------------------------
+
+void port_cpu_idle(void)
+{
+    set_sleep_mode(SLEEP_MODE_IDLE);
+    sleep_enable();
+    sleep_cpu();
+    sleep_disable();
+}
+
+// port_core_id always returns 0 (AVR is single-core; inherited from weak stub).
 
 // ---------------------------------------------------------------------------
 // Timer1 COMPA ISR — tick + context switch.
@@ -309,10 +315,6 @@ void port_start_first_task(void)
 //  7. Restore all registers from the new task's stack.
 //  8. RETI — pops PC and re-enables interrupts.
 // ---------------------------------------------------------------------------
-
-// port_cpu_idle and port_core_id are provided by the weak stubs in task.c.
-// AVR sleep requires SM bits pre-configured by the application; the weak
-// no-op default is safe here since the tick ISR always wakes the CPU.
 
 // ---------------------------------------------------------------------------
 // Save/restore macros shared by the tick ISR (TIMER1_COMPA_vect) and the
