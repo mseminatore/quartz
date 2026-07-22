@@ -77,7 +77,12 @@ Then install `extras/arduino/` via **Sketch → Include Library → Add .ZIP Lib
 
 ## Configuration
 
-Edit `include/rtos_config.h` (or define before including `rtos.h`):
+Run `python3 tools/menuconfig.py` (or `cmake --build build --target menuconfig`)
+for an interactive editor that lists every option below with its description
+and current value, and edits `include/rtos_config.h` in place. Use
+`python3 tools/menuconfig.py --list` for a non-interactive dump, or
+`--set NAME=VALUE` to script an edit. You can also edit
+`include/rtos_config.h` by hand (or define a macro before including `rtos.h`):
 
 | Macro | Default | Meaning |
 |---|---|---|

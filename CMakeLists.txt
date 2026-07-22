@@ -56,6 +56,14 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         pico_sdk_init()
     endif()
 
+    # Interactive/scriptable editor for include/rtos_config.h.
+    #   cmake --build build --target menuconfig
+    add_custom_target(menuconfig
+        COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tools/menuconfig.py
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        USES_TERMINAL
+    )
+
 else()
     # Running as add_subdirectory(): parent owns project/SDK init.
     # Detect Pico SDK by checking whether pico_sdk_init() has been called.
